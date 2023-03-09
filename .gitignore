@@ -12,6 +12,7 @@ build/
 develop-eggs/
 dist/
 downloads/
+403venv/
 eggs/
 .eggs/
 lib/
