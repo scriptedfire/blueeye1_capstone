@@ -262,88 +262,6 @@ def cartesian_to_GPS(x:float, y:float, z:float) -> list:
     latitude = phi
     return longitude, latitude
 
-def gei_to_geo(Bxgei, Bygei, Bzgei, theta) -> np.array:
-    """ @param: Bxgei: x component of the magnetic field in gei coordinates
-        @param: Bygei: y component of the magnetic field in gei coordinates
-        @param: Bzgei: z component of the magnetic field in gei coordinates
-        @param: theta: Greenwhich Mean Sidereal time.
-        return: Bxgeo, Bygeo, Bzgeo: magnetic field vector in geo coordinates
-        Documentation: http://jsoc.stanford.edu/~jsoc/keywords/Chris_Russel/Geophysical%20Coordinate%20Transformations.htm#s2
-    """
-    T_matrix = [[np.cos(theta), np.sin(theta), 0], 
-                [-np.sin(theta), np.cos(theta), 0], 
-                [0, 0, 1]]
-    Bgei = [Bxgei, Bygei, Bzgei]
-
-    T_matrix_gei_to_geo = np.array(T_matrix)
-    Bgei = np.array(Bgei)
-    
-    return np.matmul(T_matrix_gei_to_geo, Bgei)
-
-def gsm_to_gei(Bxgsm, Bygsm, Bzgsm, srasn, sdec) -> np.array:
-    """ @param: Bxgsm: x component of the magnetic field in gsm coordinates
-        @param: Bygsm: y component of the magnetic field in gsm coordinates
-        @param: Bzgsm: z component of the magnetic field in gsm coordinates
-        @param: srasn: right ascension of the sun (radians)
-        @param: sdec: declination of the sun (radians)
-        return: Bxgei, Bygei, Bzgei: magnetic field vector in gei coordinates
-        Documentation: http://jsoc.stanford.edu/~jsoc/keywords/Chris_Russel/Geophysical%20Coordinate%20Transformations.htm#s2
-    """
-    Sx = np.cos(srasn) * np.cos(sdec)
-    Sy = np.sin(srasn) * np.cos(sdec)
-    Sz = np.sin(sdec)
-
-    Sun_position = [Sx, Sy, Sz]
-
-    Dipole_prime = [0.06859, -0.18602, 0.98015]
-
-    Y_axis_numerator = np.cross(Dipole_prime, Sun_position)
-    i = 0
-    for element in Y_axis_numerator:
-        i += element ** 2
-    Y_axis_denominator = np.sqrt(i)
-
-    Y_axis = Y_axis_numerator / Y_axis_denominator
-    Z_axis = np.cross(Sun_position, Y_axis)
-
-    T_matrix_gei_to_gsm = np.array([Sun_position,
-                           Y_axis,
-                           Z_axis])
-
-    T_matrix_gsm_to_gei = inv(T_matrix_gei_to_gsm)
-    Bgsm = np.array([Bxgsm, Bygsm, Bzgsm])
-    return np.matmul(Bgsm, T_matrix_gsm_to_gei)
-
-def geo_to_mag(Bxgeo, Bygeo, Bzgeo) -> np.array:
-    """ This function coverts a vector in geo coordinates to Earth magnetic coordinates
-        @param: Bxgeo: x component of the vector in geo coordinates.
-        @param: Bygeo: y component of the vector in geo coordinates.
-        @param: Bzgeo: z component of the vector in geo coordinates.
-        return: Bxmag, Bymag, Bzmag: vector in Earth magnetic coordinates
-    """
-    T_matrix_geo_to_mag = np.array([[0.33907, -0.91964, -0.19826],
-                           [0.93826, 0.34594, 0        ],
-                           [0.06859, 0.18602, 0.98015  ]])
-    Bgeo = np.array([Bxgeo, Bygeo, Bzgeo])
-
-    return np.matmul(T_matrix_geo_to_mag, Bgeo)
-    
-def gsm_to_geo(Bxgsm, Bygsm, Bzgsm, theta, srasn, sdec) -> np.array:
-    """ @param: Bxgsm: x component of the magnetic field in gsm coordinates
-        @param: Bygsm: y component of the magnetic field in gsm coordinates
-        @param: Bzgsm: z component of the magnetic field in gsm coordinates
-        @param: theta: Greenwhich Mean Sidereal time.
-        @param: srasn: right ascension of the sun (radians)
-        @param: sdec: declination of the sun (radians)
-        return: Bxgeo, Bygeo, Bzgeo: magnetic field vector in geo coordinates
-        Documentation: http://jsoc.stanford.edu/~jsoc/keywords/Chris_Russel/Geophysical%20Coordinate%20Transformations.htm#s2
-    """
-    Bgei = gsm_to_gei(Bxgsm, Bygsm, Bzgsm, srasn, sdec)
-    
-    Bgeo = gei_to_geo(Bgei[0], Bgei[1], Bgei[2], theta)
-
-    return Bgeo
-
 def calculateSouthBField(Bxgsm: np.array, Bygsm: np.array, Bzgsm:np.array, theta:float, srasn:float, sdec:float) -> np.array:
     """ This function return an array of the magnitude of the southward components of the interplanetary magnetic field (IMF)
         @param: Bxgsm: x component of the IMF in gsm coordinates
@@ -356,8 +274,8 @@ def calculateSouthBField(Bxgsm: np.array, Bygsm: np.array, Bzgsm:np.array, theta
     """
     Bsouth = np.zeros(Bxgsm.size)
     for i in range(Bxgsm.size):
-        Bgeo = gsm_to_geo(Bxgsm[i], Bygsm[i], Bzgsm[i], theta, srasn, sdec)
-        Bgeo = geo_to_mag(Bgeo[0], Bgeo[1], Bgeo[2])
+        Bgeo = gpack.geogsm(Bxgsm[i], Bygsm[i], Bzgsm[i], -1)
+        Bgeo = gpack.geomag(Bgeo[0], Bgeo[1], Bgeo[2], 2)
         Bsouth[i] = abs(Bgeo[2])
     return Bsouth
 
@@ -452,7 +370,43 @@ def mag_plasma_merge(mag:pd.DataFrame, plasma:pd.DataFrame) -> pd.DataFrame:
     # return data frame and erase missing data
     
     df.dropna(inplace=True)
+    df.reset_index(inplace=True)
     return df
+
+def storm_data_dst_merge(data:pd.DataFrame, dst:pd.DataFrame) -> pd.DataFrame:
+    """ This function merges the storm data with the dst. 
+        This is complicated by the fact that dst data is much lower in granularity
+        @param: data: storm data
+        @param: dst: dataframe of dst indecies with time stamps
+        return: merged dataframe
+    """
+   
+    j = 0
+    # loop through the dst data frame and delete the times that are outside of the storm time
+    for i, row in dst.iterrows():
+        
+        if parser.parse(row['time']).timestamp() < parser.parse(data['time'].iloc[0]).timestamp():
+            dst.drop(dst.index[i - j], inplace=True)
+            j += 1
+        elif parser.parse(row['time']).timestamp() > parser.parse(data['time'].iloc[-1]).timestamp():
+            print("in if")
+            dst.drop(dst.index[i - j], inplace=True)
+            j += 1
+    dst.reset_index(inplace=True)
+    dst_array = np.zeros(data.index.size)
+    time_slot = 0
+    
+    for i, row in data.iterrows():
+        
+        if parser.parse(row['time']).timestamp() + 3600 > parser.parse(dst['time'].iloc[time_slot]).timestamp():
+                        time_slot += 1
+        # if the storm data extends past known dst data, use the most recent
+        if time_slot >= dst["Dst"].index.size:
+            time_slot = dst["Dst"].index.size - 1
+        dst_array[i] = dst['Dst'].iloc[time_slot]
+
+    data['dst'] = dst_array
+    return data
 
 plasma = json_plasma_to_pandas("plasma-1-day_test.json")
 mag = json_mag_to_pandas("mag-1-day_test.json")
@@ -460,11 +414,14 @@ dst = json_dst_to_pandas("kyoto-dst-0314.json")
 recent_dst = float(dst["Dst"][len(dst.index) - 1])
 
 storm_data = mag_plasma_merge(mag,plasma)
+storm_data_with_dst = storm_data_dst_merge(storm_data, dst)
+print(storm_data_with_dst)
 
-print(storm_data)
+
 
 def calculateBField(t: np.array, N: np.array, V: np.array, Bxgsm: np.array, Bygsm: np.array, Bzgsm: np.array, longitude: float, latitude: float, dst: float, resolution = 5) -> list:
     """ This function calculates and returns the magnetic field vector at a given time point which is the last time point in the t array
+        
         @param: t: numpy array of time points where the first value is at the beginning of a solar storm
         @param: N: numpy array that is the same length as t that has the solar wind density corresponding to the time point in t
         @param: V: numpy array that is the same length as t that has the solar wind speed corresponding to the time point in t
@@ -480,9 +437,9 @@ def calculateBField(t: np.array, N: np.array, V: np.array, Bxgsm: np.array, Bygs
     """
     gst, slong, srasn, sdec, obliq = gpack.sun(t[-1])
     B = calculateSouthBField(Bxgsm, Bygsm, Bzgsm, gst, srasn, sdec)
-
+    
     # update current time to be the last time in the series
-    psi = gpack.recalc(t[-1])
+    psi = gpack.recalc(t[-1], V[-1])
     x, y, z = GPS_to_cartesian(longitude, latitude)
 
     # convert geo cartesian coordinates to gsm cartesian coordinates
@@ -497,18 +454,17 @@ def calculateBField(t: np.array, N: np.array, V: np.array, Bxgsm: np.array, Bygs
     speed = V[-1]
     pdyn = Pdyn(N[-1], speed)
     parmod = [pdyn, dst, Bygsm[-1], Bzgsm[-1], W1, W2, W3, W4, W5, W6]
-
+    #print(parmod)
     Bxgsm, Bygsm, Bzgsm = t04.t04(parmod, psi,xgsm, ygsm, zgsm)
     Bxdipole, Bydipole, Bzdipole = gpack.dip(xgsm, ygsm,zgsm)
     
-    Bxgeo, Bygeo, Bzgeo = gsm_to_geo(Bxgsm + Bxdipole, Bygsm + Bydipole, Bzgsm + Bzdipole, gst, srasn, sdec)
-    return Bxgeo, Bygeo, Bzgeo
+    Bxgeo, Bygeo, Bzgeo = gpack.geogsm(Bxdipole + Bxgsm, Bydipole + Bygsm, Bzdipole + Bzgsm, -1)# gsm_to_geo(Bxgsm + Bxdipole, Bygsm + Bydipole, Bzgsm + Bzdipole, gst, srasn, sdec)
+    return Bxgeo, Bygeo, Bzgeo 
 
-def magnetic_field_predictor(storm_data:pd.DataFrame, dst:float, min_longitude:float, max_longitude: float, min_latitude:float, max_latitude:float, granularity:float) -> pd.DataFrame:
+def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_longitude: float, min_latitude:float, max_latitude:float, granularity:float) -> pd.DataFrame:
     """ Take in strom data in a pandas dataframe each column will be a different data type. The rows will be time points
         @param: storm_data: Multiindex pandas dataframe. First index is a time point, 
         second is longitude, third is latitude. The columns are the components of the IMF
-        @param: dst: current dst index in nT
         @param: min_longitude: minimum longitude in degrees
         @param: max_longitude: maximum longitude in degrees
         @param: min_latitude: minimum latitude in degrees
@@ -530,17 +486,17 @@ def magnetic_field_predictor(storm_data:pd.DataFrame, dst:float, min_longitude:f
     Bxgsm = storm_data["Bx"].to_numpy(dtype=float, copy=True)
     Bygsm = storm_data["By"].to_numpy(dtype=float, copy=True)
     Bzgsm = storm_data["Bz"].to_numpy(dtype=float, copy=True)
-
+    dst_array = storm_data['dst'].to_numpy(dtype=float, copy=True)
     # build time, longitude, and latitude array for pandas multindex.
     length = longitude_vector.size * latitude_vector.size * time_array.size
-
+    print(dst_array)
     # build index 
     time_index_array = np.empty([1, length], dtype=object)[0]
     longitude_index_array = np.empty([1, length], dtype=object)[0]
     latitude_index_array = np.empty([1, length], dtype=object)[0]
     time_point = 0
     longitude_point = 0
-    print("length ", length)
+    
     for i in range(length):
         # time should be same value up until the length of the longitude vector
         # reset longitude vector to 0 every time we reach the end of the latitude vector
@@ -576,13 +532,13 @@ def magnetic_field_predictor(storm_data:pd.DataFrame, dst:float, min_longitude:f
     resolution = time_array_minutes[1] - time_array_minutes[0]
 
     for t in range(1, time_array_minutes.size):
-        temp_time_array = time_array_minutes[:t]
-        print(temp_time_array)
+        dst = dst_array[t]
+        print(dst)
         for long in range(longitude_vector.size):
             for lat in range(latitude_vector.size):
                 # The W functions integrate to the current time point so the array should stop with the current time
                 
-                Bx, By, Bz = calculateBField(temp_time_array, particle_density, speed, Bxgsm, Bygsm, Bzgsm, long, lat, dst, resolution)
+                Bx, By, Bz = calculateBField(time_array_minutes[:t], particle_density[:t], speed[:t], Bxgsm[:t], Bygsm[:t], Bzgsm[:t], long, lat, dst, resolution)
                 
                 data.loc[(str(time_array[t]), str(longitude_vector[long]), str(latitude_vector[lat])), 'Bx'] = Bx
                 data.loc[(str(time_array[t]), str(longitude_vector[long]), str(latitude_vector[lat])), 'By'] = By
@@ -593,9 +549,9 @@ def magnetic_field_predictor(storm_data:pd.DataFrame, dst:float, min_longitude:f
 
 recent_dst = -3
 
-low_gran_storm_data = storm_data.copy(True)
+low_gran_storm_data = storm_data_with_dst.copy(True)
 j = 0
-for i in range(storm_data.index.size):
+for i in range(storm_data_with_dst.index.size):
     if i% 5 != 0:
         low_gran_storm_data.drop(low_gran_storm_data.index[i - j], inplace=True)
         j += 1
@@ -604,10 +560,10 @@ low_gran_storm_data.reset_index(inplace=True)
 
 
 
-data = magnetic_field_predictor(low_gran_storm_data, recent_dst, -105, -104, 40, 41, 0.5)
+data = magnetic_field_predictor(low_gran_storm_data, -105, -104, 40, 41, 0.5)
 print(data)
 
-data.to_csv("data03142023-2.csv")
+data.to_csv("data03142023-5.csv")
 
 finish = time.time()
 
