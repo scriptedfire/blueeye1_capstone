@@ -1,5 +1,6 @@
 from geopack import t04, gpack
 import numpy as np
+from numpy.linalg import inv
 import pandas as pd
 from math import *
 from datetime import datetime,timezone
@@ -7,6 +8,8 @@ import time
 from dateutil import parser
 import json
 from dateutil.tz import UTC
+
+start = time.time()
 
 """ 
     Author: Stephen Hurt
@@ -82,8 +85,8 @@ def Wt1(t : np.array, N : np.array, V : np.array, B : np.array, resolution = 5) 
     LAMB = 0.39
     # initialize W and comput the numerical integral over t
     Wt1 = 0
-    for k in range(t.size() - 1):
-        Wt1 += Sk(N[k], V[k], B[k], LAMB, BETA, GAMMA) * exp((R/60)*(t[k] - t[t.size() - 1]))
+    for k in range(t.size - 1):
+        Wt1 += Sk(N[k], V[k], B[k], LAMB, BETA, GAMMA) * exp((R/60)*(t[k] - t[t.size - 1]))
     normR = 60 / resolution
     Wt1 = Wt1 * (R/normR)
     return Wt1
@@ -106,8 +109,8 @@ def Wt2(t : np.array, N : np.array, V : np.array, B : np.array, resolution = 5) 
     LAMB = 0.46
     # initialize W and comput the numerical integral over t
     Wt2 = 0
-    for k in range(t.size() - 1):
-        Wt2 += Sk(N[k], V[k], B[k], LAMB, BETA, GAMMA) * exp((R/60)*(t[k] - t[t.size() - 1]))
+    for k in range(t.size - 1):
+        Wt2 += Sk(N[k], V[k], B[k], LAMB, BETA, GAMMA) * exp((R/60)*(t[k] - t[t.size - 1]))
     normR = 60 / resolution
     Wt2 = Wt2 * (R/normR)
     return Wt2
@@ -131,8 +134,8 @@ def Ws3(t : np.array, N : np.array, V : np.array, B : np.array, resolution = 5) 
     LAMB = 0.39
     # initialize W and comput the numerical integral over t
     Ws3 = 0
-    for k in range(t.size() - 1):
-        Ws3 += Sk(N[k], V[k], B[k], LAMB, BETA, GAMMA) * exp((R/60)*(t[k] - t[t.size() - 1]))
+    for k in range(t.size - 1):
+        Ws3 += Sk(N[k], V[k], B[k], LAMB, BETA, GAMMA) * exp((R/60)*(t[k] - t[t.size - 1]))
     normR = 60 / resolution
     Ws3 = Ws3 * (R/normR)
     return Ws3
@@ -155,8 +158,8 @@ def Wp4(t : np.array, N : np.array, V : np.array, B : np.array, resolution = 5) 
     LAMB = 0.42
     # initialize W and comput the numerical integral over t
     Wp4 = 0
-    for k in range(t.size() - 1):
-        Wp4 += Sk(N[k], V[k], B[k], LAMB, BETA, GAMMA) * exp((R/60)*(t[k] - t[t.size() - 1]))
+    for k in range(t.size - 1):
+        Wp4 += Sk(N[k], V[k], B[k], LAMB, BETA, GAMMA) * exp((R/60)*(t[k] - t[t.size - 1]))
     normR = 60 / resolution
     Wp4 = Wp4 * (R/normR)
     return Wp4
@@ -180,8 +183,8 @@ def Wr5(t : np.array, N : np.array, V : np.array, B : np.array, resolution = 5) 
     LAMB = 0.41
     # initialize W and comput the numerical integral over t
     Wr5 = 0
-    for k in range(t.size() - 1):
-        Wr5 += Sk(N[k], V[k], B[k], LAMB, BETA, GAMMA) * exp((R/60)*(t[k] - t[t.size() - 1]))
+    for k in range(t.size - 1):
+        Wr5 += Sk(N[k], V[k], B[k], LAMB, BETA, GAMMA) * exp((R/60)*(t[k] - t[t.size - 1]))
     normR = 60 / resolution
     Wr5 = Wr5 * (R/normR)
     return Wr5
@@ -204,8 +207,8 @@ def Wr6(t : np.array, N : np.array, V : np.array, B : np.array, resolution = 5) 
     LAMB = 1.29
     # initialize W and comput the numerical integral over t
     Wr6 = 0
-    for k in range(t.size() - 1):
-        Wr6 += Sk(N[k], V[k], B[k], LAMB, BETA, GAMMA) * exp((R/60)*(t[k] - t[t.size() - 1]))
+    for k in range(t.size - 1):
+        Wr6 += Sk(N[k], V[k], B[k], LAMB, BETA, GAMMA) * exp((R/60)*(t[k] - t[t.size - 1]))
     normR = 60 / resolution
     Wr6 = Wr6 * (R/normR)
     return Wr6
@@ -259,8 +262,104 @@ def cartesian_to_GPS(x:float, y:float, z:float) -> list:
     latitude = phi
     return longitude, latitude
 
+def gei_to_geo(Bxgei, Bygei, Bzgei, theta) -> np.array:
+    """ @param: Bxgei: x component of the magnetic field in gei coordinates
+        @param: Bygei: y component of the magnetic field in gei coordinates
+        @param: Bzgei: z component of the magnetic field in gei coordinates
+        @param: theta: Greenwhich Mean Sidereal time.
+        return: Bxgeo, Bygeo, Bzgeo: magnetic field vector in geo coordinates
+        Documentation: http://jsoc.stanford.edu/~jsoc/keywords/Chris_Russel/Geophysical%20Coordinate%20Transformations.htm#s2
+    """
+    T_matrix = [[np.cos(theta), np.sin(theta), 0], 
+                [-np.sin(theta), np.cos(theta), 0], 
+                [0, 0, 1]]
+    Bgei = [Bxgei, Bygei, Bzgei]
 
+    T_matrix_gei_to_geo = np.array(T_matrix)
+    Bgei = np.array(Bgei)
+    
+    return np.matmul(T_matrix_gei_to_geo, Bgei)
 
+def gsm_to_gei(Bxgsm, Bygsm, Bzgsm, srasn, sdec) -> np.array:
+    """ @param: Bxgsm: x component of the magnetic field in gsm coordinates
+        @param: Bygsm: y component of the magnetic field in gsm coordinates
+        @param: Bzgsm: z component of the magnetic field in gsm coordinates
+        @param: srasn: right ascension of the sun (radians)
+        @param: sdec: declination of the sun (radians)
+        return: Bxgei, Bygei, Bzgei: magnetic field vector in gei coordinates
+        Documentation: http://jsoc.stanford.edu/~jsoc/keywords/Chris_Russel/Geophysical%20Coordinate%20Transformations.htm#s2
+    """
+    Sx = np.cos(srasn) * np.cos(sdec)
+    Sy = np.sin(srasn) * np.cos(sdec)
+    Sz = np.sin(sdec)
+
+    Sun_position = [Sx, Sy, Sz]
+
+    Dipole_prime = [0.06859, -0.18602, 0.98015]
+
+    Y_axis_numerator = np.cross(Dipole_prime, Sun_position)
+    i = 0
+    for element in Y_axis_numerator:
+        i += element ** 2
+    Y_axis_denominator = np.sqrt(i)
+
+    Y_axis = Y_axis_numerator / Y_axis_denominator
+    Z_axis = np.cross(Sun_position, Y_axis)
+
+    T_matrix_gei_to_gsm = np.array([Sun_position,
+                           Y_axis,
+                           Z_axis])
+
+    T_matrix_gsm_to_gei = inv(T_matrix_gei_to_gsm)
+    Bgsm = np.array([Bxgsm, Bygsm, Bzgsm])
+    return np.matmul(Bgsm, T_matrix_gsm_to_gei)
+
+def geo_to_mag(Bxgeo, Bygeo, Bzgeo) -> np.array:
+    """ This function coverts a vector in geo coordinates to Earth magnetic coordinates
+        @param: Bxgeo: x component of the vector in geo coordinates.
+        @param: Bygeo: y component of the vector in geo coordinates.
+        @param: Bzgeo: z component of the vector in geo coordinates.
+        return: Bxmag, Bymag, Bzmag: vector in Earth magnetic coordinates
+    """
+    T_matrix_geo_to_mag = np.array([[0.33907, -0.91964, -0.19826],
+                           [0.93826, 0.34594, 0        ],
+                           [0.06859, 0.18602, 0.98015  ]])
+    Bgeo = np.array([Bxgeo, Bygeo, Bzgeo])
+
+    return np.matmul(T_matrix_geo_to_mag, Bgeo)
+    
+def gsm_to_geo(Bxgsm, Bygsm, Bzgsm, theta, srasn, sdec) -> np.array:
+    """ @param: Bxgsm: x component of the magnetic field in gsm coordinates
+        @param: Bygsm: y component of the magnetic field in gsm coordinates
+        @param: Bzgsm: z component of the magnetic field in gsm coordinates
+        @param: theta: Greenwhich Mean Sidereal time.
+        @param: srasn: right ascension of the sun (radians)
+        @param: sdec: declination of the sun (radians)
+        return: Bxgeo, Bygeo, Bzgeo: magnetic field vector in geo coordinates
+        Documentation: http://jsoc.stanford.edu/~jsoc/keywords/Chris_Russel/Geophysical%20Coordinate%20Transformations.htm#s2
+    """
+    Bgei = gsm_to_gei(Bxgsm, Bygsm, Bzgsm, srasn, sdec)
+    
+    Bgeo = gei_to_geo(Bgei[0], Bgei[1], Bgei[2], theta)
+
+    return Bgeo
+
+def calculateSouthBField(Bxgsm: np.array, Bygsm: np.array, Bzgsm:np.array, theta:float, srasn:float, sdec:float) -> np.array:
+    """ This function return an array of the magnitude of the southward components of the interplanetary magnetic field (IMF)
+        @param: Bxgsm: x component of the IMF in gsm coordinates
+        @param: Bygsm: y component of the IMF in gsm coordinates
+        @param: Bzgsm: z component of the IMF in gsm coordinates
+        @param: theta: Greenwhich Mean Sidereal time.
+        @param: srasn: right ascension of the sun (radians)
+        @param: sdec: declination of the sun (radians)
+        return: southern component of the IMF relative to the dipole
+    """
+    Bsouth = np.zeros(Bxgsm.size)
+    for i in range(Bxgsm.size):
+        Bgeo = gsm_to_geo(Bxgsm[i], Bygsm[i], Bzgsm[i], theta, srasn, sdec)
+        Bgeo = geo_to_mag(Bgeo[0], Bgeo[1], Bgeo[2])
+        Bsouth[i] = abs(Bgeo[2])
+    return Bsouth
 
 parmod = [1, 1, 1, 1 ,1 ,1 ,1 ,1 ,1 ,1]
 ps = 0.5 # Diplole tilt angle in radians recalc() will return this
@@ -350,82 +449,167 @@ def mag_plasma_merge(mag:pd.DataFrame, plasma:pd.DataFrame) -> pd.DataFrame:
     df = mag
     df["density"] = plasma["density"]
     df["speed"] = plasma["speed"]
+    # return data frame and erase missing data
+    
+    df.dropna(inplace=True)
     return df
 
-plasma = json_plasma_to_pandas("plasma-2-hour.json")
-mag = json_mag_to_pandas("mag-2-hour.json")
-dst = json_dst_to_pandas("kyoto-dst.json")
-recent_dst = dst["Dst"][len(dst.index) - 1]
-data = pd.concat([plasma,mag])
-t = parser.parse(plasma["time"][0])
-print(t)
-print(t.timestamp())
-print(plasma)
-print(mag)
-print(dst)
-print(mag_plasma_merge(mag,plasma))
+plasma = json_plasma_to_pandas("plasma-1-day_test.json")
+mag = json_mag_to_pandas("mag-1-day_test.json")
+dst = json_dst_to_pandas("kyoto-dst-0314.json")
+recent_dst = float(dst["Dst"][len(dst.index) - 1])
 
-print(recent_dst)
-time_val = ["1", "2", "3", "4"]
-location = [["10", "12"], ["9", "8"], ["10", "8"], ["9", "8"]]
-data_dict = {"Bx":[7, 8, 9, 7, 8, 9, 7, 8, 9, 7, 8, 9], "By": [10, 11, 12, 10, 11, 12, 10, 11, 12, 10, 11, 12], "Bz": [13, 14, 15, 13, 14, 15, 13, 14, 15, 13, 14, 15]}
-temp = pd.DataFrame(data_dict)
-print(temp) #"longitude": [1, 2, 3], "latitude": [4, 5, 6], 
+storm_data = mag_plasma_merge(mag,plasma)
 
-index_temp = [["1", "1", "1", "1", "2", "2", "2", "2", "3", "3", "3", "3"],
-              ["10", "10", "11", "11", "12", "12", "13", "13", "14", "14", "15", "15"],
-              ["16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27"]]
-#tuple_index = list(zip(*index_temp))
+print(storm_data)
 
-index = pd.MultiIndex.from_arrays(index_temp, names=["time", "longitude", "latitude"])
-temp2 = pd.DataFrame(data_dict, index = index)
-print(temp2)
+def calculateBField(t: np.array, N: np.array, V: np.array, Bxgsm: np.array, Bygsm: np.array, Bzgsm: np.array, longitude: float, latitude: float, dst: float, resolution = 5) -> list:
+    """ This function calculates and returns the magnetic field vector at a given time point which is the last time point in the t array
+        @param: t: numpy array of time points where the first value is at the beginning of a solar storm
+        @param: N: numpy array that is the same length as t that has the solar wind density corresponding to the time point in t
+        @param: V: numpy array that is the same length as t that has the solar wind speed corresponding to the time point in t
+        @param: B: numpy array that is the same length as t that has the southward component of the IMF corresponding to the time point in t
+        @param: Bxgsm: x component of the interplanetary magnetic field (IMF) in gsm coordinates
+        @param: Bygsm: y component of the interplanetary magnetic field (IMF) in gsm coordinates
+        @param: Bzgsm: z component of the interplanetary magnetic field (IMF) in gsm coordinates
+        @param: longitude: float of the longitude where the B field is being evaluated
+        @param: latitude: float of the longitude where the B field is being evaluated
+        @param: dst: most recent dst index in nT
+        @param: resolution: this is the resolution of the data passed in. i. e the time between measurements. The default is 5 minutes as in [1]
+        return: Bxgeo, Bygeo, Bzgeo predicted magnetic field vector
+    """
+    gst, slong, srasn, sdec, obliq = gpack.sun(t[-1])
+    B = calculateSouthBField(Bxgsm, Bygsm, Bzgsm, gst, srasn, sdec)
 
-def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_longitude: float, min_latitude:float, max_latitude:float, granularity:float) -> pd.DataFrame:
+    # update current time to be the last time in the series
+    psi = gpack.recalc(t[-1])
+    x, y, z = GPS_to_cartesian(longitude, latitude)
+
+    # convert geo cartesian coordinates to gsm cartesian coordinates
+    xgsm, ygsm, zgsm = gpack.geogsm(x, y, z, 1)
+    W1 = Wt1(t, N, V, B, resolution)
+    W2 = Wt2(t, N, V, B, resolution)
+    W3 = Ws3(t, N, V, B, resolution)
+    W4 = Wp4(t, N, V, B, resolution)
+    W5 = Wr5(t, N, V, B, resolution)
+    W6 = Wr6(t, N, V, B, resolution)
+    
+    speed = V[-1]
+    pdyn = Pdyn(N[-1], speed)
+    parmod = [pdyn, dst, Bygsm[-1], Bzgsm[-1], W1, W2, W3, W4, W5, W6]
+
+    Bxgsm, Bygsm, Bzgsm = t04.t04(parmod, psi,xgsm, ygsm, zgsm)
+    Bxdipole, Bydipole, Bzdipole = gpack.dip(xgsm, ygsm,zgsm)
+    
+    Bxgeo, Bygeo, Bzgeo = gsm_to_geo(Bxgsm + Bxdipole, Bygsm + Bydipole, Bzgsm + Bzdipole, gst, srasn, sdec)
+    return Bxgeo, Bygeo, Bzgeo
+
+def magnetic_field_predictor(storm_data:pd.DataFrame, dst:float, min_longitude:float, max_longitude: float, min_latitude:float, max_latitude:float, granularity:float) -> pd.DataFrame:
     """ Take in strom data in a pandas dataframe each column will be a different data type. The rows will be time points
+        @param: storm_data: Multiindex pandas dataframe. First index is a time point, 
+        second is longitude, third is latitude. The columns are the components of the IMF
+        @param: dst: current dst index in nT
+        @param: min_longitude: minimum longitude in degrees
+        @param: max_longitude: maximum longitude in degrees
+        @param: min_latitude: minimum latitude in degrees
+        @param: max_latitude: maximum latitude in degrees
+        @param: granularity: the step size between GPS coordinates. This parameter has a strong effect on computation time.
+        The above five parameters form a grid where the magnetic field vector will be calculated for each time point
+        return: pandas dataframe with the total magnetic field vector at each time and location
     """
     longitude_vector = np.arange(min_longitude, max_longitude, granularity)
     latitude_vector = np.arange(min_latitude, max_latitude, granularity)
-    time_array = storm_data["time"].to_numpy(dtype=float, copy=True)
+    time_array_str = storm_data["time"].to_numpy(copy=True)
+    
+    time_array = np.zeros(time_array_str.size)
+    for i in range(time_array.size):
+        time_point = parser.parse(time_array_str[i])
+        time_array[i] = time_point.timestamp()
     particle_density = storm_data["density"].to_numpy(dtype=float, copy=True)
     speed = storm_data["speed"].to_numpy(dtype=float, copy=True)
     Bxgsm = storm_data["Bx"].to_numpy(dtype=float, copy=True)
     Bygsm = storm_data["By"].to_numpy(dtype=float, copy=True)
     Bzgsm = storm_data["Bz"].to_numpy(dtype=float, copy=True)
 
-    # build time array for pandas multindex.
-    time_length = longitude_vector.size() * latitude_vector.size() * time_array.size()
-    
-    time_index_array = np.zeros(time_length)
+    # build time, longitude, and latitude array for pandas multindex.
+    length = longitude_vector.size * latitude_vector.size * time_array.size
+
+    # build index 
+    time_index_array = np.empty([1, length], dtype=object)[0]
+    longitude_index_array = np.empty([1, length], dtype=object)[0]
+    latitude_index_array = np.empty([1, length], dtype=object)[0]
     time_point = 0
-    for i in range(time_length):
-        if (i + 1) % longitude_vector.size() == 0:
-            count += 1
-        time_index_array[i] = time_array[count]
-
+    longitude_point = 0
+    print("length ", length)
+    for i in range(length):
+        # time should be same value up until the length of the longitude vector
+        # reset longitude vector to 0 every time we reach the end of the latitude vector
+        if ((i) % (latitude_vector.size)) == 0:
+            if i != 0:
+                
+                longitude_point += 1
+        if ((i) % (longitude_vector.size * latitude_vector.size)) == 0:
+            if i != 0:
+                time_point += 1
+                longitude_point = 0
+        
+        time_index_array[i] = str(time_array[time_point])
+        
+        longitude_index_array[i] = str(longitude_vector[longitude_point])
+        # repeatedly copy the longitude and latitude points to the index array
+        latitude_index_array[i] = str(latitude_vector[i % latitude_vector.size])
     
-    #Simf = 1
-    for t, time in enumerate(storm_data["time"]):
-        data_dict = {"longitude": [], "latitude": [], "Bx":[], "By": [], "Bz": []}
-        for i, long in enumerate(longitude_vector):
-            for j, lat in enumerate(latitude_vector):
-                data_dict["longitude"] = long
-                data_dict["latitude"] = lat
 
-                w1 = Wt1()
+    index = [time_index_array, longitude_index_array, latitude_index_array]
+    
+    index = pd.MultiIndex.from_arrays(index, names=["time", "longitude", "latitude"])
+    data_dict = {"Bx":np.zeros(length), "By": np.zeros(length), "Bz": np.zeros(length)}
+    data = pd.DataFrame(data_dict, index=index)
+    # data is a triple indexed pandas dataframe with magnetic field vectors zeroed
+    data.dropna(inplace=True)
+    print(data)
 
-                #data_dict["Bx"], data_dict["By"], data_dict["Bz"] = 
+    time_array_minutes = np.zeros(time_array.size)
+    for i in range(time_array.size):
+        time_array_minutes[i] = time_array[i] / 60
+    
+    resolution = time_array_minutes[1] - time_array_minutes[0]
+
+    for t in range(1, time_array_minutes.size):
+        temp_time_array = time_array_minutes[:t]
+        print(temp_time_array)
+        for long in range(longitude_vector.size):
+            for lat in range(latitude_vector.size):
+                # The W functions integrate to the current time point so the array should stop with the current time
+                
+                Bx, By, Bz = calculateBField(temp_time_array, particle_density, speed, Bxgsm, Bygsm, Bzgsm, long, lat, dst, resolution)
+                
+                data.loc[(str(time_array[t]), str(longitude_vector[long]), str(latitude_vector[lat])), 'Bx'] = Bx
+                data.loc[(str(time_array[t]), str(longitude_vector[long]), str(latitude_vector[lat])), 'By'] = By
+                data.loc[(str(time_array[t]), str(longitude_vector[long]), str(latitude_vector[lat])), 'Bz'] = Bz
+               
+
+    return data
+
+recent_dst = -3
+
+low_gran_storm_data = storm_data.copy(True)
+j = 0
+for i in range(storm_data.index.size):
+    if i% 5 != 0:
+        low_gran_storm_data.drop(low_gran_storm_data.index[i - j], inplace=True)
+        j += 1
+
+low_gran_storm_data.reset_index(inplace=True)
 
 
 
+data = magnetic_field_predictor(low_gran_storm_data, recent_dst, -105, -104, 40, 41, 0.5)
+print(data)
 
+data.to_csv("data03142023-2.csv")
 
+finish = time.time()
 
-
-
-
-
-
-
-
+print("runtime = ", finish - start)
 
