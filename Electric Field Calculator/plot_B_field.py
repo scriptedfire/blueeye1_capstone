@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
-data = pd.read_csv("data03142023_low_res_enu.csv")
+data = pd.read_csv("data03162023.csv")
 index_arrays = [data["time"].to_numpy(dtype=str),data["longitude"].to_numpy(),data["latitude"].to_numpy()]
 
 index = pd.MultiIndex.from_arrays(index_arrays, names=['time', 'longitude', 'latitude'])

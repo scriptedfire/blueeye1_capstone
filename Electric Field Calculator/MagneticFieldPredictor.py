@@ -337,21 +337,44 @@ def json_mag_to_pandas(filename:str) -> pd.DataFrame:
         data_dict["Bx"].append(array[1])
         data_dict["By"].append(array[2])
         data_dict["Bz"].append(array[3])
+    json_object.close()
     return pd.DataFrame(data_dict, columns=["time", "Bx", "By", "Bz"])
 
 def json_dst_to_pandas(filename:str) -> pd.DataFrame:
-
+    "json file of dst data to a pndas dataframe for NOAA geospace_dst file"
     json_object = open(filename)
     plasma_data = json.load(json_object)
     
     data_dict = {"time":[], "Dst":[]}
 
-    for i, array in enumerate(plasma_data):
+    for i, dict in enumerate(plasma_data):
+        
+        data_dict["time"].append(dict["time_tag"])
+        data_dict["Dst"].append(dict["dst"])
+    return pd.DataFrame(data_dict, columns=["time", "Dst"])
+
+def json_storm_data_to_pandas(filename:str) -> pd.DataFrame:
+    """convert json file of predicted storm data to pandas dataframe"""
+    json_object = open(filename)
+    storm_data = json.load(json_object)
+    
+    data_dict = {"time":[],"speed":[], "density":[], "Vx":[], "Vy":[], "Vz":[], "Bx":[], "By": [], "Bz":[]}
+
+    for i, array in enumerate(storm_data):
         if i == 0:
             continue
-        data_dict["time"].append(array[0])
-        data_dict["Dst"].append(array[1])
-    return pd.DataFrame(data_dict, columns=["time", "Dst"])
+        data_dict["time"].append(array[11])
+        data_dict["speed"].append(array[1])
+        data_dict["density"].append(array[2])
+        data_dict["Bx"].append(array[4])
+        data_dict["By"].append(array[5])
+        data_dict["Bz"].append(array[6])
+        data_dict["Vx"].append(array[8])
+        data_dict["Vy"].append(array[9])
+        data_dict["Vz"].append(array[10])
+    json_object.close()
+    return pd.DataFrame(data_dict, columns=["time","speed", "density", "Vx", "Vy", "Vz", "Bx", "By", "Bz"])
+
 
 def mag_plasma_merge(mag:pd.DataFrame, plasma:pd.DataFrame) -> pd.DataFrame:
     to_mag = mag["time"][0]
@@ -390,10 +413,10 @@ def storm_data_dst_merge(data:pd.DataFrame, dst:pd.DataFrame) -> pd.DataFrame:
     # loop through the dst data frame and delete the times that are outside of the storm time
     for i, row in dst.iterrows():
         
-        if parser.parse(row['time']).timestamp() < data['time'].iloc[0]:# parser.parse(data['time'].iloc[0]).timestamp():
+        if parser.parse(row['time']).timestamp() < parser.parse(data['time'].iloc[0]).timestamp():# parser.parse(data['time'].iloc[0]).timestamp():
             dst.drop(dst.index[i - j], inplace=True)
             j += 1
-        elif parser.parse(row['time']).timestamp() > data['time'].iloc[-1]: #parser.parse(data['time'].iloc[-1]).timestamp():
+        elif parser.parse(row['time']).timestamp() > parser.parse(data['time'].iloc[-1]).timestamp(): #parser.parse(data['time'].iloc[-1]).timestamp():
             
             dst.drop(dst.index[i - j], inplace=True)
             j += 1
@@ -403,7 +426,7 @@ def storm_data_dst_merge(data:pd.DataFrame, dst:pd.DataFrame) -> pd.DataFrame:
     
     for i, row in data.iterrows():
         
-        if row['time'] + 3600 > parser.parse(dst['time'].iloc[time_slot]).timestamp(): # parser.parse(row['time']).timestamp()
+        if parser.parse(row['time']).timestamp() > parser.parse(dst['time'].iloc[time_slot]).timestamp(): # parser.parse(row['time']).timestamp()
                         time_slot += 1
         # if the storm data extends past known dst data, use the most recent
         if time_slot >= dst["Dst"].index.size:
@@ -415,7 +438,7 @@ def storm_data_dst_merge(data:pd.DataFrame, dst:pd.DataFrame) -> pd.DataFrame:
 
 
 
-def calculateBField(t: np.array, N: np.array, V: np.array, Bxgsm: np.array, Bygsm: np.array, Bzgsm: np.array, longitudeCBF: float, latitudeCBF: float, dst: float, resolution = 5) -> list:
+def calculateBField(t: np.array, N: np.array, V: np.array, Bxgsm: np.array, Bygsm: np.array, Bzgsm: np.array, Vxgsm:float, Vygsm:float, Vzgsm:float, longitudeCBF: float, latitudeCBF: float, dst: float, resolution = 5) -> list:
     """ This function calculates and returns the magnetic field vector at a given time point which is the last time point in the t array
         
         @param: t: numpy array of time points where the first value is at the beginning of a solar storm
@@ -431,7 +454,8 @@ def calculateBField(t: np.array, N: np.array, V: np.array, Bxgsm: np.array, Bygs
         @param: resolution: this is the resolution of the data passed in. i. e the time between measurements. The default is 5 minutes as in [1]
         return: Bxgeo, Bygeo, Bzgeo predicted magnetic field vector
     """
-    psi = gpack.recalc(t[-1], V[-1])
+    
+    psi = gpack.recalc(t[-1], Vxgsm, Vygsm, Vzgsm)
     gst, slong, srasn, sdec, obliq = gpack.sun(t[-1])
     B = calculateSouthBField(Bxgsm, Bygsm, Bzgsm, gst, srasn, sdec)
     
@@ -461,9 +485,7 @@ def calculateBField(t: np.array, N: np.array, V: np.array, Bxgsm: np.array, Bygs
     # n = north component (x)
     # u = upward component (z)
     e, n, u = geo_to_enu(Bxgeo, Bygeo, Bzgeo, longitudeCBF, latitudeCBF)
-    print("e, n, u ",e, n, u)
-    print("Bxgeo, Bygeo, Bzgeo ",Bxgeo, Bygeo, Bzgeo)
-    print(longitudeCBF, latitudeCBF)
+    
     return n, e, u
 
 def impact_time_shift(storm_data_real_time: pd.DataFrame) -> pd.DataFrame:
@@ -513,6 +535,9 @@ def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_l
     Bxgsm = storm_data["Bx"].to_numpy(dtype=float, copy=True)
     Bygsm = storm_data["By"].to_numpy(dtype=float, copy=True)
     Bzgsm = storm_data["Bz"].to_numpy(dtype=float, copy=True)
+    Vxgsm = storm_data["Vx"].to_numpy(dtype=float, copy=True)
+    Vygsm = storm_data["Vy"].to_numpy(dtype=float, copy=True)
+    Vzgsm = storm_data["Vz"].to_numpy(dtype=float, copy=True)
     dst_array = storm_data['dst'].to_numpy(dtype=float, copy=True)
     # build time, longitude, and latitude array for pandas multindex.
     length = longitude_vector.size * latitude_vector.size * time_array.size
@@ -565,7 +590,7 @@ def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_l
             for lat in range(latitude_vector.size):
                 # The W functions integrate to the current time point so the array should stop with the current time
                 
-                Bx, By, Bz = calculateBField(time_array_minutes[:t], particle_density[:t], speed[:t], Bxgsm[:t], Bygsm[:t], Bzgsm[:t], longitude_vector[long], latitude_vector[lat], dst, resolution)
+                Bx, By, Bz = calculateBField(time_array_minutes[:t], particle_density[:t], speed[:t], Bxgsm[:t], Bygsm[:t], Bzgsm[:t], Vxgsm[t], Vygsm[t], Vzgsm[t], longitude_vector[long], latitude_vector[lat], dst, resolution)
                 
                 data.loc[(str(time_array[t]), str(longitude_vector[long]), str(latitude_vector[lat])), 'Bx'] = Bx
                 data.loc[(str(time_array[t]), str(longitude_vector[long]), str(latitude_vector[lat])), 'By'] = By
@@ -591,22 +616,25 @@ print(geo_to_enu(-5687.808696521344, -5704.456296717376, 29950.32399670261, long
 #xgsm, ygsm, zgsm = gpack.geogsm(xgeo, ygeo, zgeo, 1)
 #print(xgsm, ygsm, zgsm)
 
-plasma = json_plasma_to_pandas("plasma-1-day_test.json")
-mag = json_mag_to_pandas("mag-1-day_test.json")
-dst = json_dst_to_pandas("kyoto-dst-0314.json")
+#plasma = json_plasma_to_pandas("plasma-1-day_test.json")
+#mag = json_mag_to_pandas("mag-1-day_test.json")
+dst = json_dst_to_pandas("geospace_dst_1_hour.json")
 recent_dst = float(dst["Dst"][len(dst.index) - 1])
 
-storm_data = mag_plasma_merge(mag, plasma)
 
-storm_data_with_offset = impact_time_shift(storm_data)
+#storm_data = mag_plasma_merge(mag, plasma)
+storm_data_no_dst = json_storm_data_to_pandas("propagated-solar-wind-1-hour.json")
+storm_data_with_dst = storm_data_dst_merge(storm_data_no_dst, dst)
+print(storm_data_with_dst)
+storm_data = impact_time_shift(storm_data_with_dst)
+
+print(storm_data)
 
 
-storm_data_with_dst = storm_data_dst_merge(storm_data_with_offset, dst)
 
-
-low_gran_storm_data = storm_data_with_dst.copy(True)
+low_gran_storm_data = storm_data.copy(True)
 j = 0
-for i in range(storm_data_with_dst.index.size):
+for i in range(storm_data.index.size):
     if i% 5 != 0:
         low_gran_storm_data.drop(low_gran_storm_data.index[i - j], inplace=True)
         j += 1
@@ -615,11 +643,11 @@ low_gran_storm_data.reset_index(inplace=True)
 
 
 
-data = magnetic_field_predictor(low_gran_storm_data, -105, -104, 40, 41, 0.5)
+data = magnetic_field_predictor(storm_data, -105, -104, 40, 41, 0.5)
 
 print(data)
 
-data.to_csv("data03142023_low_res_enu.csv")
+data.to_csv("data03162023.csv")
 
 finish = time.time()
 
