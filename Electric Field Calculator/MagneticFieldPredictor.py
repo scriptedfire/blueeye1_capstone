@@ -213,17 +213,22 @@ def Wr6(t : np.array, N : np.array, V : np.array, B : np.array, resolution = 5) 
     Wr6 = Wr6 * (R/normR)
     return Wr6
 
-def GPS_to_cartesian(longitude:float, latitude:float) -> list:
-    """Converts gps coordiantes to geocentric cartesian coordinates in earth radii"""
+def GPS_to_cartesian(longitude:float, latitude:float, elevation:float = 0) -> list:
+    """Converts gps coordiantes to geocentric cartesian coordinates in earth radii
+        elevations assumed to be in feet
+    """
+    Re  = 2.093e+7 # feet
+    rho = 1 + elevation/Re
 
     if latitude >= 0:
         phi = np.pi/2 - np.deg2rad(latitude)
     else:
         phi = -np.deg2rad(latitude) + np.pi/2
     theta = np.deg2rad(longitude)
-    x = np.sin(phi) * np.cos(theta)
-    y = np.sin(phi) * np.sin(theta)
-    z = np.cos(phi)
+    
+    x = rho * np.sin(phi) * np.cos(theta)
+    y = rho * np.sin(phi) * np.sin(theta)
+    z = rho * np.cos(phi)
     return x, y, z
 
 def cartesian_to_GPS(x:float, y:float, z:float) -> list:
@@ -262,6 +267,28 @@ def cartesian_to_GPS(x:float, y:float, z:float) -> list:
     latitude = phi
     return longitude, latitude
 
+def geo_to_enu(x:float, y:float, z:float, longitude:float, latitude:float):
+    """ This function is a coordinate transform from geocentric coordinates to enu coordinates
+        @param: x, x coordinate in geocentric coordinates
+        @param: y, y coordinate in geocentric coordinates
+        @param: z, z coordinate in geocentric coordinates
+        @param: longitude: longitude in degrees
+        @param: latitude: latitude in degrees
+        return: e, n, u: coordinates in enu
+        documentation: https://gssc.esa.int/navipedia/index.php/Transformations_between_ECEF_and_ENU_coordinates
+    """ 
+    lamb = np.deg2rad(longitude)
+    phi = np.deg2rad(latitude)
+    T = [[-np.sin(lamb),                np.cos(lamb),                         0],
+         [-np.cos(lamb) * np.sin(phi), -np.sin(lamb) * np.sin(phi), np.cos(phi)],
+         [ -np.cos(lamb) * np.cos(phi),  -np.sin(lamb) * np.cos(phi), -np.sin(phi)]]
+    T_matrix = np.array(T)
+    
+    Bgeo = np.array([x, y, z])
+    #print(T_matrix)
+    e, n, u = np.matmul(T_matrix, Bgeo)
+    return e, n, u
+
 def calculateSouthBField(Bxgsm: np.array, Bygsm: np.array, Bzgsm:np.array, theta:float, srasn:float, sdec:float) -> np.array:
     """ This function return an array of the magnitude of the southward components of the interplanetary magnetic field (IMF)
         @param: Bxgsm: x component of the IMF in gsm coordinates
@@ -279,28 +306,6 @@ def calculateSouthBField(Bxgsm: np.array, Bygsm: np.array, Bzgsm:np.array, theta
         Bsouth[i] = abs(Bgeo[2])
     return Bsouth
 
-parmod = [1, 1, 1, 1 ,1 ,1 ,1 ,1 ,1 ,1]
-ps = 0.5 # Diplole tilt angle in radians recalc() will return this
-x,y,z = 1, 1, 1
-
-x = t04.t04(parmod,ps,x,y,z)
-#print(x)
-
-
-now_utc = time.time()
-
-theta,phi = cartesian_to_GPS(1,-1,-1)
-longitude = np.rad2deg(theta)
-latitude = np.rad2deg(phi)
-print(longitude,latitude)
-
-x, y, z = GPS_to_cartesian(longitude, latitude)
-print(x,y,z)
-
-#print(now_utc)
-gpack.recalc(now_utc)
-z = gpack.geogsm(1.01, 0, 0, -1)
-print(z)
 
 def json_plasma_to_pandas(filename:str) -> pd.DataFrame:
 
@@ -385,11 +390,11 @@ def storm_data_dst_merge(data:pd.DataFrame, dst:pd.DataFrame) -> pd.DataFrame:
     # loop through the dst data frame and delete the times that are outside of the storm time
     for i, row in dst.iterrows():
         
-        if parser.parse(row['time']).timestamp() < parser.parse(data['time'].iloc[0]).timestamp():
+        if parser.parse(row['time']).timestamp() < data['time'].iloc[0]:# parser.parse(data['time'].iloc[0]).timestamp():
             dst.drop(dst.index[i - j], inplace=True)
             j += 1
-        elif parser.parse(row['time']).timestamp() > parser.parse(data['time'].iloc[-1]).timestamp():
-            print("in if")
+        elif parser.parse(row['time']).timestamp() > data['time'].iloc[-1]: #parser.parse(data['time'].iloc[-1]).timestamp():
+            
             dst.drop(dst.index[i - j], inplace=True)
             j += 1
     dst.reset_index(inplace=True)
@@ -398,7 +403,7 @@ def storm_data_dst_merge(data:pd.DataFrame, dst:pd.DataFrame) -> pd.DataFrame:
     
     for i, row in data.iterrows():
         
-        if parser.parse(row['time']).timestamp() + 3600 > parser.parse(dst['time'].iloc[time_slot]).timestamp():
+        if row['time'] + 3600 > parser.parse(dst['time'].iloc[time_slot]).timestamp(): # parser.parse(row['time']).timestamp()
                         time_slot += 1
         # if the storm data extends past known dst data, use the most recent
         if time_slot >= dst["Dst"].index.size:
@@ -408,18 +413,9 @@ def storm_data_dst_merge(data:pd.DataFrame, dst:pd.DataFrame) -> pd.DataFrame:
     data['dst'] = dst_array
     return data
 
-plasma = json_plasma_to_pandas("plasma-1-day_test.json")
-mag = json_mag_to_pandas("mag-1-day_test.json")
-dst = json_dst_to_pandas("kyoto-dst-0314.json")
-recent_dst = float(dst["Dst"][len(dst.index) - 1])
-
-storm_data = mag_plasma_merge(mag,plasma)
-storm_data_with_dst = storm_data_dst_merge(storm_data, dst)
-print(storm_data_with_dst)
 
 
-
-def calculateBField(t: np.array, N: np.array, V: np.array, Bxgsm: np.array, Bygsm: np.array, Bzgsm: np.array, longitude: float, latitude: float, dst: float, resolution = 5) -> list:
+def calculateBField(t: np.array, N: np.array, V: np.array, Bxgsm: np.array, Bygsm: np.array, Bzgsm: np.array, longitudeCBF: float, latitudeCBF: float, dst: float, resolution = 5) -> list:
     """ This function calculates and returns the magnetic field vector at a given time point which is the last time point in the t array
         
         @param: t: numpy array of time points where the first value is at the beginning of a solar storm
@@ -435,12 +431,13 @@ def calculateBField(t: np.array, N: np.array, V: np.array, Bxgsm: np.array, Bygs
         @param: resolution: this is the resolution of the data passed in. i. e the time between measurements. The default is 5 minutes as in [1]
         return: Bxgeo, Bygeo, Bzgeo predicted magnetic field vector
     """
+    psi = gpack.recalc(t[-1], V[-1])
     gst, slong, srasn, sdec, obliq = gpack.sun(t[-1])
     B = calculateSouthBField(Bxgsm, Bygsm, Bzgsm, gst, srasn, sdec)
     
     # update current time to be the last time in the series
-    psi = gpack.recalc(t[-1], V[-1])
-    x, y, z = GPS_to_cartesian(longitude, latitude)
+    
+    x, y, z = GPS_to_cartesian(longitudeCBF, latitudeCBF, 5318)
 
     # convert geo cartesian coordinates to gsm cartesian coordinates
     xgsm, ygsm, zgsm = gpack.geogsm(x, y, z, 1)
@@ -454,12 +451,41 @@ def calculateBField(t: np.array, N: np.array, V: np.array, Bxgsm: np.array, Bygs
     speed = V[-1]
     pdyn = Pdyn(N[-1], speed)
     parmod = [pdyn, dst, Bygsm[-1], Bzgsm[-1], W1, W2, W3, W4, W5, W6]
-    #print(parmod)
-    Bxgsm, Bygsm, Bzgsm = t04.t04(parmod, psi,xgsm, ygsm, zgsm)
-    Bxdipole, Bydipole, Bzdipole = gpack.dip(xgsm, ygsm,zgsm)
     
-    Bxgeo, Bygeo, Bzgeo = gpack.geogsm(Bxdipole + Bxgsm, Bydipole + Bygsm, Bzdipole + Bzgsm, -1)# gsm_to_geo(Bxgsm + Bxdipole, Bygsm + Bydipole, Bzgsm + Bzdipole, gst, srasn, sdec)
-    return Bxgeo, Bygeo, Bzgeo 
+    Bxgsm, Bygsm, Bzgsm = t04.t04(parmod, psi, xgsm, ygsm, zgsm)
+    
+    Bxdipole, Bydipole, Bzdipole = gpack.dip(xgsm, ygsm, zgsm)
+    
+    Bxgeo, Bygeo, Bzgeo = gpack.geogsm(Bxdipole + Bxgsm, Bydipole + Bygsm, Bzdipole + Bzgsm, -1) #gpack.geogsm(Bxdipole, Bydipole, Bzdipole, -1)
+    # e = east component (y)
+    # n = north component (x)
+    # u = upward component (z)
+    e, n, u = geo_to_enu(Bxgeo, Bygeo, Bzgeo, longitudeCBF, latitudeCBF)
+    print("e, n, u ",e, n, u)
+    print("Bxgeo, Bygeo, Bzgeo ",Bxgeo, Bygeo, Bzgeo)
+    print(longitudeCBF, latitudeCBF)
+    return n, e, u
+
+def impact_time_shift(storm_data_real_time: pd.DataFrame) -> pd.DataFrame:
+    """ This function takes in a pandas dataframe of real time storm data and 
+        shifts the time values to the expected time when it hits Earth. 
+        This assumes the data is being retrieved form 1500000 kilometers away
+        @param: storm_data_real_time: pandas dataframe with real time solar data
+        return: storm_data: time shifted to the conditions on earth at impact
+    """ 
+    distance = 1500000 #km
+    storm_data = storm_data_real_time.copy(True)
+    time_array = np.zeros(storm_data.index.size, dtype=object)
+    
+    for i, time_df in storm_data.groupby(level=0):
+        # add the time it will take for the storm to hit and add to the list
+        
+        time_array[i] =  round(parser.parse(time_df['time'].iloc[0]).timestamp() + distance / float(time_df['speed']), 1)
+        
+    
+    storm_data['time'] = time_array
+    storm_data.sort_values('time', inplace=True)
+    return storm_data
 
 def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_longitude: float, min_latitude:float, max_latitude:float, granularity:float) -> pd.DataFrame:
     """ Take in strom data in a pandas dataframe each column will be a different data type. The rows will be time points
@@ -473,14 +499,15 @@ def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_l
         The above five parameters form a grid where the magnetic field vector will be calculated for each time point
         return: pandas dataframe with the total magnetic field vector at each time and location
     """
+    #storm_data = impact_time_shift(storm_data_real_time)
     longitude_vector = np.arange(min_longitude, max_longitude, granularity)
     latitude_vector = np.arange(min_latitude, max_latitude, granularity)
-    time_array_str = storm_data["time"].to_numpy(copy=True)
+    time_array = storm_data["time"].to_numpy(copy=True)
     
-    time_array = np.zeros(time_array_str.size)
-    for i in range(time_array.size):
-        time_point = parser.parse(time_array_str[i])
-        time_array[i] = time_point.timestamp()
+    # time_array = np.zeros(time_array_str.size)
+    #for i in range(time_array.size):
+    #    time_point = parser.parse(time_array_str[i])
+    #    time_array[i] = time_point.timestamp()
     particle_density = storm_data["density"].to_numpy(dtype=float, copy=True)
     speed = storm_data["speed"].to_numpy(dtype=float, copy=True)
     Bxgsm = storm_data["Bx"].to_numpy(dtype=float, copy=True)
@@ -489,7 +516,7 @@ def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_l
     dst_array = storm_data['dst'].to_numpy(dtype=float, copy=True)
     # build time, longitude, and latitude array for pandas multindex.
     length = longitude_vector.size * latitude_vector.size * time_array.size
-    print(dst_array)
+    
     # build index 
     time_index_array = np.empty([1, length], dtype=object)[0]
     longitude_index_array = np.empty([1, length], dtype=object)[0]
@@ -523,7 +550,7 @@ def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_l
     data = pd.DataFrame(data_dict, index=index)
     # data is a triple indexed pandas dataframe with magnetic field vectors zeroed
     data.dropna(inplace=True)
-    print(data)
+    
 
     time_array_minutes = np.zeros(time_array.size)
     for i in range(time_array.size):
@@ -533,12 +560,12 @@ def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_l
 
     for t in range(1, time_array_minutes.size):
         dst = dst_array[t]
-        print(dst)
+        
         for long in range(longitude_vector.size):
             for lat in range(latitude_vector.size):
                 # The W functions integrate to the current time point so the array should stop with the current time
                 
-                Bx, By, Bz = calculateBField(time_array_minutes[:t], particle_density[:t], speed[:t], Bxgsm[:t], Bygsm[:t], Bzgsm[:t], long, lat, dst, resolution)
+                Bx, By, Bz = calculateBField(time_array_minutes[:t], particle_density[:t], speed[:t], Bxgsm[:t], Bygsm[:t], Bzgsm[:t], longitude_vector[long], latitude_vector[lat], dst, resolution)
                 
                 data.loc[(str(time_array[t]), str(longitude_vector[long]), str(latitude_vector[lat])), 'Bx'] = Bx
                 data.loc[(str(time_array[t]), str(longitude_vector[long]), str(latitude_vector[lat])), 'By'] = By
@@ -547,7 +574,35 @@ def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_l
 
     return data
 
-recent_dst = -3
+# test geogsm
+long = -105
+lat = 80
+
+
+print(geo_to_enu(-5687.808696521344, -5704.456296717376, 29950.32399670261, long, lat))
+
+#xgeo, ygeo, zgeo = GPS_to_cartesian(long, lat)
+#print(xgeo, ygeo, zgeo)
+#utc = '03/16/2023  04:12:00 UTC'
+#utc = parser.parse(utc).timestamp()
+#print(utc)
+#gpack.recalc(utc)
+#
+#xgsm, ygsm, zgsm = gpack.geogsm(xgeo, ygeo, zgeo, 1)
+#print(xgsm, ygsm, zgsm)
+
+plasma = json_plasma_to_pandas("plasma-1-day_test.json")
+mag = json_mag_to_pandas("mag-1-day_test.json")
+dst = json_dst_to_pandas("kyoto-dst-0314.json")
+recent_dst = float(dst["Dst"][len(dst.index) - 1])
+
+storm_data = mag_plasma_merge(mag, plasma)
+
+storm_data_with_offset = impact_time_shift(storm_data)
+
+
+storm_data_with_dst = storm_data_dst_merge(storm_data_with_offset, dst)
+
 
 low_gran_storm_data = storm_data_with_dst.copy(True)
 j = 0
@@ -561,9 +616,10 @@ low_gran_storm_data.reset_index(inplace=True)
 
 
 data = magnetic_field_predictor(low_gran_storm_data, -105, -104, 40, 41, 0.5)
+
 print(data)
 
-data.to_csv("data03142023-5.csv")
+data.to_csv("data03142023_low_res_enu.csv")
 
 finish = time.time()
 
