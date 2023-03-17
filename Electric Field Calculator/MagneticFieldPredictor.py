@@ -454,8 +454,9 @@ def calculateBField(t: np.array, N: np.array, V: np.array, Bxgsm: np.array, Bygs
         @param: resolution: this is the resolution of the data passed in. i. e the time between measurements. The default is 5 minutes as in [1]
         return: Bxgeo, Bygeo, Bzgeo predicted magnetic field vector
     """
-    
-    psi = gpack.recalc(t[-1], Vxgsm, Vygsm, Vzgsm)
+    gpack.recalc(t[-1])
+    Vxgse, Vygse, Vzgse = gpack.gsmgse(Vxgsm, Vygsm, Vzgsm, 1) 
+    psi = gpack.recalc(t[-1], Vxgse, Vygse, Vzgse)
     gst, slong, srasn, sdec, obliq = gpack.sun(t[-1])
     B = calculateSouthBField(Bxgsm, Bygsm, Bzgsm, gst, srasn, sdec)
     
@@ -502,11 +503,11 @@ def impact_time_shift(storm_data_real_time: pd.DataFrame) -> pd.DataFrame:
     for i, time_df in storm_data.groupby(level=0):
         # add the time it will take for the storm to hit and add to the list
         
-        time_array[i] =  round(parser.parse(time_df['time'].iloc[0]).timestamp() + distance / float(time_df['speed']), 1)
+        time_array[i] = parser.parse(time_df['time'].iloc[0]).timestamp() # round(parser.parse(time_df['time'].iloc[0]).timestamp() + distance / float(time_df['speed']), 1)
         
     
     storm_data['time'] = time_array
-    storm_data.sort_values('time', inplace=True)
+    #storm_data.sort_values('time', inplace=True)
     return storm_data
 
 def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_longitude: float, min_latitude:float, max_latitude:float, granularity:float) -> pd.DataFrame:
@@ -521,7 +522,7 @@ def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_l
         The above five parameters form a grid where the magnetic field vector will be calculated for each time point
         return: pandas dataframe with the total magnetic field vector at each time and location
     """
-    #storm_data = impact_time_shift(storm_data_real_time)
+    # storm_data = impact_time_shift(storm_data_real_time)
     longitude_vector = np.arange(min_longitude, max_longitude, granularity)
     latitude_vector = np.arange(min_latitude, max_latitude, granularity)
     time_array = storm_data["time"].to_numpy(copy=True)
@@ -599,57 +600,35 @@ def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_l
 
     return data
 
-# test geogsm
-long = -105
-lat = 80
-
-
-print(geo_to_enu(-5687.808696521344, -5704.456296717376, 29950.32399670261, long, lat))
-
-#xgeo, ygeo, zgeo = GPS_to_cartesian(long, lat)
-#print(xgeo, ygeo, zgeo)
-#utc = '03/16/2023  04:12:00 UTC'
-#utc = parser.parse(utc).timestamp()
-#print(utc)
-#gpack.recalc(utc)
-#
-#xgsm, ygsm, zgsm = gpack.geogsm(xgeo, ygeo, zgeo, 1)
-#print(xgsm, ygsm, zgsm)
-
-#plasma = json_plasma_to_pandas("plasma-1-day_test.json")
-#mag = json_mag_to_pandas("mag-1-day_test.json")
-dst = json_dst_to_pandas("geospace_dst_1_hour.json")
-recent_dst = float(dst["Dst"][len(dst.index) - 1])
-
 
 #storm_data = mag_plasma_merge(mag, plasma)
-storm_data_no_dst = json_storm_data_to_pandas("propagated-solar-wind-1-hour.json")
-storm_data_with_dst = storm_data_dst_merge(storm_data_no_dst, dst)
-print(storm_data_with_dst)
-storm_data = impact_time_shift(storm_data_with_dst)
+# storm_data_no_dst = json_storm_data_to_pandas("propagated-solar-wind-1-hour.json")
+# storm_data_with_dst = storm_data_dst_merge(storm_data_no_dst, dst)
+# print(storm_data_with_dst)
+# storm_data = impact_time_shift(storm_data_with_dst)
 
-print(storm_data)
-
-
-
-low_gran_storm_data = storm_data.copy(True)
-j = 0
-for i in range(storm_data.index.size):
-    if i% 5 != 0:
-        low_gran_storm_data.drop(low_gran_storm_data.index[i - j], inplace=True)
-        j += 1
-
-low_gran_storm_data.reset_index(inplace=True)
+# print(storm_data)
 
 
 
-data = magnetic_field_predictor(storm_data, -105, -104, 40, 41, 0.5)
+# low_gran_storm_data = storm_data.copy(True)
+# j = 0
+# for i in range(storm_data.index.size):
+#     if i% 5 != 0:
+#         low_gran_storm_data.drop(low_gran_storm_data.index[i - j], inplace=True)
+#         j += 1
 
-print(data)
+# low_gran_storm_data.reset_index(inplace=True)
 
-data.to_csv("data03162023.csv")
 
-finish = time.time()
 
-print("runtime = ", finish - start)
+# data = magnetic_field_predictor(storm_data, -105, -104, 40, 41, 0.5)
+
+# print(data)
+
+# data.to_csv("data03162023.csv")
+
+# finish = time.time()
+
+# print("runtime = ", finish - start)
 
