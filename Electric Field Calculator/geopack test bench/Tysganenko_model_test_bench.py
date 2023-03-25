@@ -131,27 +131,29 @@ print(var_intermagnet_z, var_synthetic_z, cov_z)
 
 rho_z = cov_z / np.sqrt(var_intermagnet_z * var_synthetic_z)
 
-avg_intermagnet_x = mean(vector_intermagnet_x)
-avg_synthetic_x = mean(vector_synthetic_x)
+# uncomment to see each waveform offset removed
 
-for i in range(vector_intermagnet_x.size):
-    vector_synthetic_x[i] -= avg_synthetic_x
-    vector_intermagnet_x[i] -= avg_intermagnet_x
-
-avg_intermagnet_y = mean(vector_intermagnet_y)
-avg_synthetic_y = mean(vector_synthetic_y)
-
-for i in range(vector_intermagnet_y.size):
-    vector_synthetic_y[i] -= avg_synthetic_y
-    vector_intermagnet_y[i] -= avg_intermagnet_y
-
-avg_intermagnet_z = mean(vector_intermagnet_z)
-avg_synthetic_z = mean(vector_synthetic_z)
-
-for i in range(vector_intermagnet_z.size):
-    vector_synthetic_z[i] -= avg_synthetic_z
-    vector_intermagnet_z[i] -= avg_intermagnet_z
-
+# avg_intermagnet_x = mean(vector_intermagnet_x)
+# avg_synthetic_x = mean(vector_synthetic_x)
+# 
+# for i in range(vector_intermagnet_x.size):
+#     vector_synthetic_x[i] -= avg_synthetic_x
+#     vector_intermagnet_x[i] -= avg_intermagnet_x
+# 
+# avg_intermagnet_y = mean(vector_intermagnet_y)
+# avg_synthetic_y = mean(vector_synthetic_y)
+# 
+# for i in range(vector_intermagnet_y.size):
+#     vector_synthetic_y[i] -= avg_synthetic_y
+#     vector_intermagnet_y[i] -= avg_intermagnet_y
+# 
+# avg_intermagnet_z = mean(vector_intermagnet_z)
+# avg_synthetic_z = mean(vector_synthetic_z)
+# 
+# for i in range(vector_intermagnet_z.size):
+#     vector_synthetic_z[i] -= avg_synthetic_z
+#     vector_intermagnet_z[i] -= avg_intermagnet_z
+# 
 print('rho_z = ', rho_z)
 
 plt.plot(time, pdyn_tsg, label= 'tsg pdyn')
