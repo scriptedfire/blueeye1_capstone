@@ -12,7 +12,6 @@ build/
 develop-eggs/
 dist/
 downloads/
-Bfieldvenv/
 eggs/
 .eggs/
 lib/
@@ -110,7 +109,16 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+Bfieldvenv/
+ASCANx5B1/
+ASCMm8zob/
+CCMC Run 2015/
+data/
 
+# other python files
+NC_File_reader.py
+data_processing.py
+quasi_application_core.py
 # Spyder project settings
 .spyderproject
 .spyproject

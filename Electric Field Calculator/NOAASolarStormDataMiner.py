@@ -155,27 +155,24 @@ def data_scraper(start_date:str, file_path:str = None) -> pd.DataFrame:
     for i, time_df in storm_data.groupby(level=0):
         # add the time it will take for the storm to hit and add to the list
         
-        time_array[i] = parser.parse(time_df['time'].iloc[0]).timestamp() # round(parser.parse(time_df['time'].iloc[0]).timestamp() + distance / float(time_df['speed']), 1)
-        
+        time_array[i] = parser.parse(time_df['time'].iloc[0]).timestamp() 
     
     storm_data['time'] = time_array
     
-    end_date = '2023-03-16 23:59:00.000'
-    end_date = parser.parse(end_date).timestamp()
-
+    
     data = storm_data[storm_data['time'] > start_date]
-    data = data[data['time'] < end_date]
+    
     data.reset_index(inplace=True)
     data.drop(data.columns[0], axis=1, inplace=True)
     # create file with the data if a file path is given
     if file_path:
-        storm_data_to_csv(data, file_path)
+        storm_data_to_csv(storm_data, file_path)
     
     return data
 
 if '__name__' == '__main__':
-    begin = "2023-03-15 00:02:00"
-    print(data_scraper(begin, FILE_Path))
+    begin = "2023-03-23 00:00:00 UTC"
+    print(data_scraper(begin))
 
     finish = time.time()
 
