@@ -1,8 +1,11 @@
 import tkinter as tk
 from tkinter import N,S,E,W
 from tkinter import ttk
+from tkinter import filedialog as fdialog
 
 class App(tk.Tk):
+    grid_data = {}
+
     def __init__(self):
         super().__init__()
         
@@ -23,7 +26,7 @@ class App(tk.Tk):
         self.v_scroll['command'] = self.grid_canvas.yview
 
         # buttons
-        self.load_btn = ttk.Button(self.body, text="Load Grid File", command=self.test_fn)
+        self.load_btn = ttk.Button(self.body, text="Load Grid File", command=self.load_file)
         self.play_btn = ttk.Button(self.body, text="Play/Pause Simulation", command=self.test_fn)
         self.date_label = ttk.Label(self.body, text="Solar Storm Date:")
 
@@ -91,9 +94,31 @@ class App(tk.Tk):
 
         # test code
         self.place_bus(10, 10, 1)
-        self.place_bus(400,400, 2)
+        self.place_bus(400, 400, 2)
         self.place_bus(500, 10, 3)
         self.place_bus(700, 700, 4)
+
+        self.place_wire(10, 10, 500, 10)
+        self.place_wire(10, 10, 400, 400)
+        self.place_wire(500, 10, 400, 400)
+        self.place_wire(500, 10, 700, 700)
+        self.place_wire(400, 400, 700, 700)
+
+    def load_file_process_sections(self, section):
+        return list(map(lambda line : line.split(','), section.split('\n')))
+
+    def load_file(self, *args):
+        filetypes = (("RAW files", "*.RAW"),)
+
+        # open file
+        with fdialog.askopenfile(filetypes=filetypes) as grid_file:
+            # split file data into sections, sections into lines, and lines into values
+            fdata = list(map(self.load_file_process_sections, grid_file.read().split("/")))
+
+            # carve relevant sections from data
+            busdata = fdata[1][3:-1]
+            branchdata = fdata[5][1:-1]
+            transformerdata = fdata[6][1:-1]
 
     def test_fn(self, *args):
         print("Button pressed.")
@@ -117,6 +142,26 @@ class App(tk.Tk):
         rect_id = self.grid_canvas.create_rectangle((x_val, y_val, x_val + 20, y_val + 20), fill="green", tags=('palette', 'palettered'))
         self.grid_canvas.create_text(x_val + 10, y_val + 10, text='B' + str(bus_num), anchor='center', font='TkMenuFont', fill='white')
         return rect_id
+
+    def place_wire(self, from_x_val, from_y_val, to_x_val, to_y_val):
+        # connect bus squares at corners
+        if from_x_val < to_x_val and from_y_val < to_y_val:
+            return self.grid_canvas.create_line(from_x_val + 20, from_y_val + 20, to_x_val, to_y_val, fill="red", width=2)
+        elif from_x_val > to_x_val and from_y_val > to_y_val:
+            return self.grid_canvas.create_line(from_x_val, from_y_val, to_x_val + 20, to_y_val + 20, fill="red", width=2)
+        elif from_x_val < to_x_val and from_y_val > from_x_val:
+            return self.grid_canvas.create_line(from_x_val + 20, from_y_val, to_x_val, to_y_val + 20, fill="red", width=2)
+        elif from_x_val > to_x_val and from_y_val < from_x_val:
+            return self.grid_canvas.create_line(from_x_val, from_y_val + 20, to_x_val + 20, to_y_val, fill="red", width=2)
+        # connect bus squares at sides if on the same axis
+        elif from_x_val == to_x_val and from_y_val < from_x_val:
+            return self.grid_canvas.create_line(from_x_val + 10, from_y_val + 20, to_x_val + 10, to_y_val, fill="red", width=2)
+        elif from_x_val == to_x_val and from_y_val > from_x_val:
+            return self.grid_canvas.create_line(from_x_val + 10, from_y_val, to_x_val + 10, to_y_val + 20, fill="red", width=2)
+        elif from_x_val < to_x_val and from_y_val == from_x_val:
+            return self.grid_canvas.create_line(from_x_val + 20, from_y_val + 10, to_x_val, to_y_val + 10, fill="red", width=2)
+        elif from_x_val > to_x_val and from_y_val == from_x_val:
+            return self.grid_canvas.create_line(from_x_val, from_y_val + 10, to_x_val + 20, to_y_val + 10, fill="red", width=2)
 
 if __name__ == "__main__":
     app = App()
