@@ -1,4 +1,4 @@
-import electric_field_predictor
+import ElectricFieldPredictor
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -26,7 +26,7 @@ k = np.zeros(7)
 k_phi = np.zeros(7)
 
 for i in range(7):
-    k_i = electric_field_predictor.k_f(quebec_res, f_m[i])
+    k_i = ElectricFieldPredictor.k_f(quebec_res, f_m[i])
     k[i] = abs(k_i) * 10**(-3)
     k_phi[i] = np.arctan2(k_i.imag,k_i.real) * 180/np.pi
 
@@ -60,7 +60,7 @@ for t in range(time.size):
         E[t] += E_m[m] * np.sin(2*np.pi*f_m[m]*time[t] + phi_m2[m])
 
 
-my_E_field = electric_field_predictor.B_to_E(quebec_res, B, time, 1)
+my_E_field = ElectricFieldPredictor.B_to_E(quebec_res, B, time, 1)
 
 plt.plot(time, B)
 plt.title('Magnetic Field Test Data')
