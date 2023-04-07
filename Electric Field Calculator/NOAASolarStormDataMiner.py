@@ -39,7 +39,6 @@ def json_dst_to_pandas(json_object:object) -> pd.DataFrame:
 def json_storm_data_to_pandas(storm_data:object) -> pd.DataFrame:
     """convert json file of predicted storm data to pandas dataframe"""
     
-    #storm_data = json.load(json_object)
     
     data_dict = {"time":[],"speed":[], "density":[], "Vx":[], "Vy":[], "Vz":[], "Bx":[], "By": [], "Bz":[]}
 
@@ -65,10 +64,8 @@ def json_storm_data_to_pandas(storm_data:object) -> pd.DataFrame:
 def storm_data_to_csv(df:pd.DataFrame, file_path) -> None:
     """convert dataframe of predicted storm data to csv"""
     
-    start_time = str(datetime.fromtimestamp(df["time"].iloc[0])) #time.gmtime(df["time"].iloc[0] - 18000) #df["time"].iloc[0] # time.gmtime(df["time"].iloc[0])
-    end_time = str(datetime.fromtimestamp(df["time"].iloc[-1])) #time.gmtime(df["time"].iloc[-1] - 18000) #df["time"].iloc[-1] # time.gmtime(df["time"].iloc[-1])
-    print(start_time)
-    print(end_time)
+    start_time = str(datetime.fromtimestamp(df["time"].iloc[0]))
+    end_time = str(datetime.fromtimestamp(df["time"].iloc[-1])) 
     
     start_time = start_time[:10] + '-' + start_time[11:13] + start_time[14:16] + start_time[17:]
     end_time = end_time[:10] + '-' + end_time[11:13] + end_time[14:16] + end_time[17:]
@@ -94,10 +91,10 @@ def storm_data_dst_merge(data:pd.DataFrame, dst:pd.DataFrame) -> pd.DataFrame:
     # loop through the dst data frame and delete the times that are outside of the storm time
     for i, row in dst.iterrows():
         
-        if parser.parse(row['time']).timestamp() < parser.parse(data['time'].iloc[0]).timestamp():# parser.parse(data['time'].iloc[0]).timestamp():
+        if parser.parse(row['time']).timestamp() < parser.parse(data['time'].iloc[0]).timestamp():
             dst.drop(dst.index[i - j], inplace=True)
             j += 1
-        elif parser.parse(row['time']).timestamp() > parser.parse(data['time'].iloc[-1]).timestamp(): #parser.parse(data['time'].iloc[-1]).timestamp():
+        elif parser.parse(row['time']).timestamp() > parser.parse(data['time'].iloc[-1]).timestamp(): 
             
             dst.drop(dst.index[i - j], inplace=True)
             j += 1
@@ -105,22 +102,21 @@ def storm_data_dst_merge(data:pd.DataFrame, dst:pd.DataFrame) -> pd.DataFrame:
     dst_array = np.zeros(data.index.size)
     time_slot = 0
     
-    # FIXME: see if theis loop can be avoided with a conditional slice
     for i, row in data.iterrows():
         
-        if parser.parse(row['time']).timestamp() > parser.parse(dst['time'].iloc[time_slot]).timestamp(): # parser.parse(row['time']).timestamp()
+        if parser.parse(row['time']).timestamp() > parser.parse(dst['time'].iloc[time_slot]).timestamp(): 
                         time_slot += 1
         # if the storm data extends past known dst data, use the most recent
         if time_slot >= dst["Dst"].index.size:
             time_slot = dst["Dst"].index.size - 1
         dst_array[i] = dst['Dst'].iloc[time_slot]
-
+    
     data['dst'] = dst_array
     return data
 
 
 
-def data_scraper(start_date:str, file_path:str = None) -> pd.DataFrame:
+def data_scraper(start_date:str,file:object, file_path:str = None) -> pd.DataFrame:
     """This is the function that will be called to run the data scraper
         @param: start_date: beggining date and time for which data is requested in UTC. 
         Must be more recent than 7 days and before the most distant prediction
@@ -131,6 +127,7 @@ def data_scraper(start_date:str, file_path:str = None) -> pd.DataFrame:
     count = 0
     max_attempts = 1000
     error = 'no error'
+    file.write('Requesting data from NOAA...\n')
     while count < max_attempts:
         try:
             r_storm_data = urllib.request.urlopen(URL_STORM_DATA)
@@ -140,7 +137,9 @@ def data_scraper(start_date:str, file_path:str = None) -> pd.DataFrame:
              error = str(e) + f" maximum, {max_attempts}, attemps exceeded when requesting data from NOAA"
              count += 1
     if count >= max_attempts:
+         file.write("Failed to retrieve data from NOAA after 1000 attempts.\n")
          return error
+    file.write("Data retrieved from NOAA.\nProcessing data...\n")
     storm_data = json.load(r_storm_data)
     dst = json.load(r_dst_index)
     dst_df = json_dst_to_pandas(dst)
@@ -148,12 +147,11 @@ def data_scraper(start_date:str, file_path:str = None) -> pd.DataFrame:
     
     storm_data = storm_data_dst_merge(storm_data_df, dst_df)
 
-    #################################################
-    #storm_data = data.copy(True)
+    
     time_array = np.zeros(storm_data.index.size, dtype=object)
     
     for i, time_df in storm_data.groupby(level=0):
-        # add the time it will take for the storm to hit and add to the list
+        # convert to UTC time in seconds
         
         time_array[i] = parser.parse(time_df['time'].iloc[0]).timestamp() 
     
@@ -164,16 +162,11 @@ def data_scraper(start_date:str, file_path:str = None) -> pd.DataFrame:
     
     data.reset_index(inplace=True)
     data.drop(data.columns[0], axis=1, inplace=True)
+    file.write("Data Processing complete.\n")
     # create file with the data if a file path is given
     if file_path:
+        file.write("Saving data to file path...\n")
         storm_data_to_csv(storm_data, file_path)
+        file.write("Data saved to file path.\n")
     
     return data
-
-if '__name__' == '__main__':
-    begin = "2023-03-23 00:00:00 UTC"
-    print(data_scraper(begin))
-
-    finish = time.time()
-
-    print("runtime = ", finish - start)

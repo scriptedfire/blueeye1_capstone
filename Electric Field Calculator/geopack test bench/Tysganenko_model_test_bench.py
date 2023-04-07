@@ -74,7 +74,6 @@ bzgsm_tsg = synthetic['p4'].to_numpy(dtype=float)
 
 time = synthetic['time'].to_numpy(dtype=float)
 
-print(time[max4_syni] - time[max4_tsgi])
 
 var_intermagnet_x =  np.var(vector_intermagnet_x)
 
@@ -90,8 +89,8 @@ var_synthetic_z = np.var(vector_synthetic_z)
 
 print("covariance pdyn: ", rho(pdyn_syn, pdyn_tsg))
 print("covariance dst: ", rho(dst_used, dst_tsg))
-print("covariance Bygsm: ", rho(bygsm_syn, bygsm_tsg))
-print("covariance Bzgsm: ", rho(bzgsm_syn, bzgsm_tsg))
+#print("covariance Bygsm: ", rho(bygsm_syn, bygsm_tsg))
+#print("covariance Bzgsm: ", rho(bzgsm_syn, bzgsm_tsg))
 print("covariance W1: ", rho(w1_syn, w1_tsg))
 print("covariance W2: ", rho(w2_syn, w2_tsg))
 print("covariance W3: ", rho(w3_syn, w3_tsg))
@@ -158,12 +157,16 @@ print('rho_z = ', rho_z)
 
 plt.plot(time, pdyn_tsg, label= 'tsg pdyn')
 plt.plot(time, pdyn_syn, label= 'synthetic pdyn')
+plt.xlabel('Time (s)')
+plt.ylabel('Pressure (nP)')
 plt.legend()
 # 
 plt.show()
 # 
 plt.plot(time, dst_tsg, label= 'tsg dst')
 plt.plot(time, dst_used, label= 'synthetic dst')
+plt.xlabel('Time (s)')
+plt.ylabel('dst (nT)')
 plt.legend()
 # 
 plt.show()
@@ -182,55 +185,67 @@ plt.show()
 
 plt.plot(time, w1_tsg, label= 'tsg w1')
 plt.plot(time, w1_syn, label= 'synthetic w1')
+plt.xlabel('Time (s)')
 plt.legend()
 
 plt.show()
 
 plt.plot(time, w2_tsg, label= 'tsg w2')
 plt.plot(time, w2_syn, label= 'synthetic w2')
+plt.xlabel('Time (s)')
 plt.legend()
 
 plt.show()
 
 plt.plot(time, w3_tsg, label= 'tsg w3')
 plt.plot(time, w3_syn, label= 'synthetic w3')
+plt.xlabel('Time (s)')
 plt.legend()
 
 plt.show()
 
 plt.plot(time, w4_tsg, label= 'tsg w4')
 plt.plot(time, w4_syn, label= 'synthetic w4')
+plt.xlabel('Time (s)')
 plt.legend()
 
 plt.show()
 
 plt.plot(time, w5_tsg, label= 'tsg w5')
 plt.plot(time, w5_syn, label= 'synthetic w5')
+plt.xlabel('Time (s)')
 plt.legend()
 
 plt.show()
 
 plt.plot(time, w6_tsg, label= 'tsg w6')
 plt.plot(time, w6_syn, label= 'synthetic w6')
+plt.xlabel('Time (s)')
 plt.legend()
 
 plt.show()
 
 
-plt.plot(time, vector_intermagnet_x, label= 'intermagnet x')
+plt.plot(time, vector_intermagnet_x, label= 'tsg x')
 plt.plot(time, vector_synthetic_x, label= 'synthetic x')
+plt.xlabel('Time (s)')
+plt.ylabel('Magnetic Field (nT)')
 plt.legend()
 
 plt.show()
 
-plt.plot(time, vector_intermagnet_y, label= 'intermagnet y')
+plt.plot(time, vector_intermagnet_y, label= 'tsg y')
 plt.plot(time, vector_synthetic_y, label= 'synthetic y')
+plt.xlabel('Time (s)')
+plt.ylabel('Magnetic Field (nT)')
 plt.legend()
 
 plt.show()
 
-plt.plot(time, vector_intermagnet_z, label= 'intermagnet z')
+plt.plot(time, vector_intermagnet_z, label= 'tsg z')
 plt.plot(time, vector_synthetic_z, label= 'synthetic z')
+plt.xlabel('Time (s)')
+plt.ylabel('Magnetic Field (nT)')
 plt.legend()
 
 plt.show()
