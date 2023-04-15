@@ -6,8 +6,10 @@ from tkinter import filedialog as fdialog
 class App(tk.Tk):
     # constant: display size of substation squares
     sq_size = 4
+
     # constant: canvas size for scaling lat/long
     grid_canvas_size = 1800
+
     # state from file: values for lat/long to canvas x/y conversion
     max_lat = 0
     max_long = 0
@@ -102,22 +104,68 @@ class App(tk.Tk):
         self.ampm_input.grid(column=11, row=0, sticky=(W,E))
         self.time_label.grid(column=12, row=0, sticky=(W,E), padx=5)
 
-        # test code
-        #self.place_bus(10, 10, 1)
-        #self.place_bus(400, 400, 2)
-        #self.place_bus(500, 10, 3)
-        #self.place_bus(700, 700, 4)
-
-        #self.place_wire(10, 10, 500, 10)
-        #self.place_wire(10, 10, 400, 400)
-        #self.place_wire(500, 10, 400, 400)
-        #self.place_wire(500, 10, 700, 700)
-        #self.place_wire(400, 400, 700, 700)
-
     def load_file_process_sections(self, section):
         "Helper to make file data splitting process more readable"
         return list(map(lambda line : line.split('"'), section.split('\n')))
-    
+
+    def load_file(self, *args):
+        "Loads grid file in RAW format chosen by the user into state"
+        # FIXME: clear canvas/state
+        filetypes = (("AUX files", "*.AUX"),)
+
+        # open file
+        with fdialog.askopenfile(filetypes=filetypes) as grid_file:
+            # split file data into sections, sections into lines, and lines into values
+            fdata = list(map(self.load_file_process_sections, grid_file.read().split("\n\n")))
+
+            substationdata = fdata[27][3:-1]
+
+            located_substationsx = []
+            located_substationsy = []
+            located_ids = []
+            for item in substationdata:
+                coords = item[4].split(' ')
+                if len(coords) == 2:
+                    continue
+                xcoord = float(coords[2])
+                ycoord = float(coords[1])
+                located_substationsx.append(xcoord)
+                located_substationsy.append(ycoord)
+                located_ids.append(int(item[0]))
+
+            self.min_long = min(located_substationsx)
+            self.min_lat = min(located_substationsy)
+            self.max_long = max(located_substationsx)
+            self.max_lat = max(located_substationsy)
+
+            self.generate_axial_labels()
+
+            print(located_substationsx)
+            print(located_substationsy)
+
+            for i in range(len(located_substationsx)):
+                self.place_sub(located_substationsx[i], located_substationsy[i], located_ids[i])
+
+            # TODO: load data into state
+
+    def test_fn(self, *args):
+        print("Button pressed.")
+
+    def validate_dyear(self, *args):
+        val = self.dyear_val.get()
+        if len(val) > 0:
+            lastkey = val[len(val) - 1]
+        else:
+            return
+
+        if not lastkey.isdigit():
+            self.dyear_input.delete(len(val) - 1, "end")
+        elif len(val) > 4:
+            self.dyear_input.delete(4, "end")
+
+    def clear_dyear(self, *args):
+        self.dyear_input.delete(0, "end")
+
     # using https://stackoverflow.com/a/2450158
     # modified to work better for canvas purposes
     def long_to_x(self, long):
@@ -158,71 +206,26 @@ class App(tk.Tk):
 
         return int(lat)
 
-    def load_file(self, *args):
-        "Loads grid file in RAW format chosen by the user into state"
-        # FIXME: clear canvas/state
-        filetypes = (("AUX files", "*.AUX"),)
+    def place_sub(self, long, lat, bus_num):
+        # convert lat/long to x/y
+        x_val = self.long_to_x(long)
+        y_val = self.lat_to_y(lat)
 
-        # open file
-        with fdialog.askopenfile(filetypes=filetypes) as grid_file:
-            # split file data into sections, sections into lines, and lines into values
-            fdata = list(map(self.load_file_process_sections, grid_file.read().split("\n\n")))
-
-            substationdata = fdata[27][3:-1]
-
-            located_substationsx = []
-            located_substationsy = []
-            located_ids = []
-            for item in substationdata:
-                coords = item[4].split(' ')
-                if len(coords) == 2:
-                    continue
-                xcoord = float(coords[2])
-                ycoord = float(coords[1])
-                located_substationsx.append(xcoord)
-                located_substationsy.append(ycoord)
-                located_ids.append(int(item[0]))
-
-            self.min_long = min(located_substationsx)
-            self.min_lat = min(located_substationsy)
-            self.max_long = max(located_substationsx)
-            self.max_lat = max(located_substationsy)
-
-            located_substationsx = list(map(self.long_to_x, located_substationsx))
-            located_substationsy = list(map(self.lat_to_y, located_substationsy))
-
-            print(located_substationsx)
-            print(located_substationsy)
-
-            for i in range(len(located_substationsx)):
-                self.place_bus(located_substationsx[i], located_substationsy[i], located_ids[i])
-
-            # TODO: load data into state
-
-    def test_fn(self, *args):
-        print("Button pressed.")
-
-    def validate_dyear(self, *args):
-        val = self.dyear_val.get()
-        if len(val) > 0:
-            lastkey = val[len(val) - 1]
-        else:
-            return
-
-        if not lastkey.isdigit():
-            self.dyear_input.delete(len(val) - 1, "end")
-        elif len(val) > 4:
-            self.dyear_input.delete(4, "end")
-
-    def clear_dyear(self, *args):
-        self.dyear_input.delete(0, "end")
-
-    def place_bus(self, x_val, y_val, bus_num):
+        # place sub rectangle
         rect_id = self.grid_canvas.create_rectangle((x_val, y_val, x_val + self.sq_size, y_val + self.sq_size), fill="#00ff40", tags=('palette', 'palettered'))
-        self.grid_canvas.create_text(x_val + (self.sq_size / 2), y_val + (self.sq_size * 3), text='B' + str(bus_num), anchor='center', font='TkMenuFont', fill='black')
+        
+        # place sub text
+        self.grid_canvas.create_text(x_val + (self.sq_size / 2), y_val + (self.sq_size * 3), text='S' + str(bus_num), anchor='center', font='TkMenuFont', fill='black')
+
         return rect_id
 
-    def place_wire(self, from_x_val, from_y_val, to_x_val, to_y_val):
+    def place_wire(self, from_long, from_lat, to_long, to_lat):
+        # convert lat/long to x/y
+        from_x_val = self.long_to_x(from_long)
+        from_y_val = self.lat_to_y(from_lat)
+        to_x_val = self.long_to_x(to_long)
+        to_y_val = self.lat_to_y(to_lat)
+
         # connect bus squares at corners
         if from_x_val < to_x_val and from_y_val < to_y_val:
             return self.grid_canvas.create_line(from_x_val + self.sq_size, from_y_val + self.sq_size, to_x_val, to_y_val, fill="red", width=2)
@@ -232,6 +235,7 @@ class App(tk.Tk):
             return self.grid_canvas.create_line(from_x_val + self.sq_size, from_y_val, to_x_val, to_y_val + self.sq_size, fill="red", width=2)
         elif from_x_val > to_x_val and from_y_val < from_x_val:
             return self.grid_canvas.create_line(from_x_val, from_y_val + self.sq_size, to_x_val + self.sq_size, to_y_val, fill="red", width=2)
+        
         # connect bus squares at sides if on the same axis
         elif from_x_val == to_x_val and from_y_val < from_x_val:
             return self.grid_canvas.create_line(from_x_val + (self.sq_size / 2), from_y_val + self.sq_size, to_x_val + (self.sq_size / 2), to_y_val, fill="red", width=2)
@@ -241,6 +245,25 @@ class App(tk.Tk):
             return self.grid_canvas.create_line(from_x_val + self.sq_size, from_y_val + (self.sq_size / 2), to_x_val, to_y_val + (self.sq_size / 2), fill="red", width=2)
         elif from_x_val > to_x_val and from_y_val == from_x_val:
             return self.grid_canvas.create_line(from_x_val, from_y_val + (self.sq_size / 2), to_x_val + self.sq_size, to_y_val + (self.sq_size / 2), fill="red", width=2)
+        
+    def generate_axial_labels(self):
+        # find how many long degrees in display area
+        x_label_count = int(self.max_long - self.min_long)
+
+        # add long degree labels
+        for i in range(0, x_label_count + 1):
+            x_coord = self.long_to_x(i + self.min_long)
+            y_coord = self.lat_to_y(self.max_lat)
+            self.grid_canvas.create_text(x_coord, y_coord, text=str(int(i + self.min_long)) + 'E', anchor='center', font='TkMenuFont', fill='blue')
+
+        # find how many lat degrees in display area
+        y_label_count = int(self.max_lat - self.min_lat)
+
+        # add lat degree labels
+        for i in range(0, y_label_count + 1):
+            x_coord = self.long_to_x(self.min_long)
+            y_coord = self.lat_to_y(i + self.min_lat)
+            self.grid_canvas.create_text(x_coord, y_coord, text=str(int(i + self.min_lat)) + 'N', anchor='center', font='TkMenuFont', fill='blue')
 
 if __name__ == "__main__":
     app = App()
