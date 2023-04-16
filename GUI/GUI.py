@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import N,S,E,W
 from tkinter import ttk
 from tkinter import filedialog as fdialog
+from math import sin, cos, radians
 
 class App(tk.Tk):
     # constant: display size of substation squares
@@ -10,13 +11,19 @@ class App(tk.Tk):
     # constant: canvas size for scaling lat/long
     grid_canvas_size = 1800
 
+    # constant: toss distance percent for approximating sub locations that don't have coords
+    toss_percent = 0.02
+
     # state from file: values for lat/long to canvas x/y conversion
     max_lat = 0
     max_long = 0
     min_lat = 0
     min_long = 0
 
-    grid_data = {}
+    # state from file: grid data
+    substation_data = {}
+    bus_data = {}
+    branch_data = []
 
     def __init__(self):
         super().__init__()
@@ -106,7 +113,7 @@ class App(tk.Tk):
 
     def load_file_process_sections(self, section):
         "Helper to make file data splitting process more readable"
-        return list(map(lambda line : line.split('"'), section.split('\n')))
+        return list(map(lambda line : (' '.join(line.split())).split('"'), section.split('\n')))
 
     def load_file(self, *args):
         "Loads grid file in RAW format chosen by the user into state"
@@ -118,33 +125,137 @@ class App(tk.Tk):
             # split file data into sections, sections into lines, and lines into values
             fdata = list(map(self.load_file_process_sections, grid_file.read().split("\n\n")))
 
-            substationdata = fdata[27][3:-1]
+            # get substation data
+            substation_fdata = fdata[27][3:-1]
 
-            located_substationsx = []
-            located_substationsy = []
-            located_ids = []
-            for item in substationdata:
+            located_substations_lat = []
+            located_substations_long = []
+            next_angle = 15
+            for item in substation_fdata:
+                id = int(item[0])
                 coords = item[4].split(' ')
+                # FIXME: load substations without coords as having no coords
                 if len(coords) == 2:
+                    self.substation_data[id] = {"lat": None, "long": None, "next_angle": next_angle}
+                    next_angle += 15
+                    next_angle %= 360
                     continue
-                xcoord = float(coords[2])
-                ycoord = float(coords[1])
-                located_substationsx.append(xcoord)
-                located_substationsy.append(ycoord)
-                located_ids.append(int(item[0]))
+                lat = float(coords[1])
+                long = float(coords[2])
+                located_substations_lat.append(lat)
+                located_substations_long.append(long)
+                self.substation_data[id] = {"lat": lat, "long": long, "next_angle": next_angle}
+                next_angle += 15
+                next_angle %= 360
 
-            self.min_long = min(located_substationsx)
-            self.min_lat = min(located_substationsy)
-            self.max_long = max(located_substationsx)
-            self.max_lat = max(located_substationsy)
+            # get limits
+            self.min_long = min(located_substations_long)
+            self.min_lat = min(located_substations_lat)
+            self.max_long = max(located_substations_long)
+            self.max_lat = max(located_substations_lat)
 
+            # get bus data
+            bus_fdata = fdata[19][11:-1]
+
+            for item in bus_fdata:
+                id = int(item[0])
+                sub_num = int((item[2].split())[8])
+                self.bus_data[id] = {"sub_num" : sub_num}
+
+            # get branch data
+            branch_fdata = fdata[23][12:-1]
+
+            for item in branch_fdata:
+                ids = item[0].split()
+                self.branch_data.append([int(ids[0]), int(ids[1])])
+
+            # find branches that go between substations
+            unplaced_branches_btwn_subs = []
+            for i in range(len(self.branch_data)):
+                ids = self.branch_data[i]
+                from_bus = self.bus_data[ids[0]]
+                to_bus = self.bus_data[ids[1]]
+                from_sub_num = from_bus["sub_num"]
+                to_sub_num = to_bus["sub_num"]
+                if(from_sub_num != to_sub_num):
+                    unplaced_branches_btwn_subs.append([from_sub_num, to_sub_num])
+
+            print(len(unplaced_branches_btwn_subs))
+            print(len(self.branch_data))
+
+            # loop through branches until all are placed and all substations have locations
+            while(len(unplaced_branches_btwn_subs) != 0):
+                still_unplaced = []
+                for i in range(len(unplaced_branches_btwn_subs)):
+                    ids = unplaced_branches_btwn_subs[i]
+                    from_sub = self.substation_data[ids[0]]
+                    to_sub = self.substation_data[ids[1]]
+
+                    from_sub_lat = from_sub["lat"]
+                    from_sub_long = from_sub["long"]
+                    to_sub_lat = to_sub["lat"]
+                    to_sub_long = to_sub["long"]
+
+                    # if no coords at all, skip for now
+                    if(from_sub_lat == None and to_sub_lat == None):
+                        still_unplaced.append(ids)
+
+                    # if both have coords, draw on map
+                    elif(from_sub_lat != None and to_sub_lat != None):
+                        self.place_wire(from_sub_long, from_sub_lat, to_sub_long, to_sub_lat)
+
+                    # if only one has coords, toss other a percent distance away in a given direction
+                    elif(from_sub_lat != None and to_sub_lat == None):
+                        # calculate vector for tossing sub
+                        toss_angle = from_sub["next_angle"]
+                        toss_magnitude = (self.max_long - self.min_long) * self.toss_percent
+
+                        # toss sub
+                        to_sub_lat = from_sub_lat + toss_magnitude * sin(radians(toss_angle))
+                        to_sub_long = from_sub_long + toss_magnitude * cos(radians(toss_angle))
+
+                        # graph branch
+                        self.place_wire(from_sub_long, from_sub_lat, to_sub_long, to_sub_lat)
+
+                        # update sub data
+                        to_sub["lat"] = to_sub_lat
+                        to_sub["long"] = to_sub_long
+                        to_sub["next_angle"] = toss_angle + 90
+
+                    elif(from_sub_lat == None and to_sub_lat != None):
+                        # calculate vector for tossing sub
+                        toss_angle = from_sub["next_angle"]
+                        toss_magnitude = (self.max_long - self.min_long) * self.toss_percent
+
+                        # toss sub
+                        from_sub_lat = to_sub_lat + toss_magnitude * sin(radians(toss_angle))
+                        from_sub_long = to_sub_long + toss_magnitude * cos(radians(toss_angle))
+
+                        # graph branch
+                        self.place_wire(from_sub_long, from_sub_lat, to_sub_long, to_sub_lat)
+
+                        # update sub data
+                        from_sub["lat"] = from_sub_lat
+                        from_sub["long"] = from_sub_long
+                        from_sub["next_angle"] = toss_angle + 90
+
+                unplaced_branches_btwn_subs = still_unplaced
+
+            lost_count = 0
+            for item in self.substation_data:
+                if(self.substation_data[item]["lat"] == None):
+                    lost_count += 1
+
+            print("Lost count:", lost_count)
+
+            for i in self.substation_data:
+                sub_to_place = self.substation_data[i]
+                self.place_sub(sub_to_place["long"], sub_to_place["lat"], i)
+
+            # set labels using limits
             self.generate_axial_labels()
 
-            print(located_substationsx)
-            print(located_substationsy)
-
-            for i in range(len(located_substationsx)):
-                self.place_sub(located_substationsx[i], located_substationsy[i], located_ids[i])
+            print(len(self.bus_data))
 
             # TODO: load data into state
 
@@ -172,11 +283,11 @@ class App(tk.Tk):
         # center in coordinate space
         long -= (self.max_long + self.min_long) / 2
 
-        # scale to ~(-0.49, 0.49)
+        # scale to ~(-0.48, 0.48)
         # slightly shrunken so ends aren't placed on edge of canvas
-        long /= max(self.max_long - self.min_long, self.max_lat - self.min_lat) * 1.02
+        long /= max(self.max_long - self.min_long, self.max_lat - self.min_lat) * 1.05
 
-        # translate to (0.01, 0.99)
+        # translate to (0.02, 0.98)
         long += 0.5
 
         # scale to desired canvas size
@@ -190,15 +301,15 @@ class App(tk.Tk):
         # center in coordinate space
         lat -= (self.max_lat + self.min_lat) / 2
 
-        # scale to ~(-0.49, 0.49)
+        # scale to ~(-0.48, 0.48)
         # slightly shrunken so ends aren't placed on edge of canvas
-        lat /= max(self.max_long - self.min_long, self.max_lat - self.min_lat) * 1.02
+        lat /= max(self.max_long - self.min_long, self.max_lat - self.min_lat) * 1.05
 
         # invert y axis to adjust for canvas origin location
         # being in top left rather than bottom left
         lat *= -1
 
-        # translate to (0.01, 0.99)
+        # translate to (0.02, 0.98)
         lat += 0.5
 
         # scale to desired canvas size
@@ -215,7 +326,7 @@ class App(tk.Tk):
         rect_id = self.grid_canvas.create_rectangle((x_val, y_val, x_val + self.sq_size, y_val + self.sq_size), fill="#00ff40", tags=('palette', 'palettered'))
         
         # place sub text
-        self.grid_canvas.create_text(x_val + (self.sq_size / 2), y_val + (self.sq_size * 3), text='S' + str(bus_num), anchor='center', font='TkMenuFont', fill='black')
+        self.grid_canvas.create_text(x_val + (self.sq_size / 2), y_val + (self.sq_size * 3), text='S' + str(bus_num), anchor='center', font=("Helvetica", 8), fill='black')
 
         return rect_id
 
@@ -231,20 +342,24 @@ class App(tk.Tk):
             return self.grid_canvas.create_line(from_x_val + self.sq_size, from_y_val + self.sq_size, to_x_val, to_y_val, fill="red", width=2)
         elif from_x_val > to_x_val and from_y_val > to_y_val:
             return self.grid_canvas.create_line(from_x_val, from_y_val, to_x_val + self.sq_size, to_y_val + self.sq_size, fill="red", width=2)
-        elif from_x_val < to_x_val and from_y_val > from_x_val:
+        elif from_x_val < to_x_val and from_y_val > to_y_val:
             return self.grid_canvas.create_line(from_x_val + self.sq_size, from_y_val, to_x_val, to_y_val + self.sq_size, fill="red", width=2)
-        elif from_x_val > to_x_val and from_y_val < from_x_val:
+        elif from_x_val > to_x_val and from_y_val < to_y_val:
             return self.grid_canvas.create_line(from_x_val, from_y_val + self.sq_size, to_x_val + self.sq_size, to_y_val, fill="red", width=2)
         
         # connect bus squares at sides if on the same axis
-        elif from_x_val == to_x_val and from_y_val < from_x_val:
+        elif from_x_val == to_x_val and from_y_val < to_y_val:
             return self.grid_canvas.create_line(from_x_val + (self.sq_size / 2), from_y_val + self.sq_size, to_x_val + (self.sq_size / 2), to_y_val, fill="red", width=2)
-        elif from_x_val == to_x_val and from_y_val > from_x_val:
+        elif from_x_val == to_x_val and from_y_val > to_y_val:
             return self.grid_canvas.create_line(from_x_val + (self.sq_size / 2), from_y_val, to_x_val + (self.sq_size / 2), to_y_val + self.sq_size, fill="red", width=2)
-        elif from_x_val < to_x_val and from_y_val == from_x_val:
+        elif from_x_val < to_x_val and from_y_val == to_y_val:
             return self.grid_canvas.create_line(from_x_val + self.sq_size, from_y_val + (self.sq_size / 2), to_x_val, to_y_val + (self.sq_size / 2), fill="red", width=2)
-        elif from_x_val > to_x_val and from_y_val == from_x_val:
+        elif from_x_val > to_x_val and from_y_val == to_y_val:
             return self.grid_canvas.create_line(from_x_val, from_y_val + (self.sq_size / 2), to_x_val + self.sq_size, to_y_val + (self.sq_size / 2), fill="red", width=2)
+        
+        else:
+            print("strange values in place wire:")
+            print(from_x_val, to_x_val, from_y_val, to_y_val)
         
     def generate_axial_labels(self):
         # find how many long degrees in display area
@@ -254,7 +369,7 @@ class App(tk.Tk):
         for i in range(0, x_label_count + 1):
             x_coord = self.long_to_x(i + self.min_long)
             y_coord = self.lat_to_y(self.max_lat)
-            self.grid_canvas.create_text(x_coord, y_coord, text=str(int(i + self.min_long)) + 'E', anchor='center', font='TkMenuFont', fill='blue')
+            self.grid_canvas.create_text(x_coord, y_coord, text=str(int(i + self.min_long)) + 'E', anchor='center', font=("Helvetica", 12, "bold"), fill='blue')
 
         # find how many lat degrees in display area
         y_label_count = int(self.max_lat - self.min_lat)
@@ -263,7 +378,7 @@ class App(tk.Tk):
         for i in range(0, y_label_count + 1):
             x_coord = self.long_to_x(self.min_long)
             y_coord = self.lat_to_y(i + self.min_lat)
-            self.grid_canvas.create_text(x_coord, y_coord, text=str(int(i + self.min_lat)) + 'N', anchor='center', font='TkMenuFont', fill='blue')
+            self.grid_canvas.create_text(x_coord, y_coord, text=str(int(i + self.min_lat)) + 'N', anchor='center', font=("Helvetica", 12, "bold"), fill='blue')
 
 if __name__ == "__main__":
     app = App()
