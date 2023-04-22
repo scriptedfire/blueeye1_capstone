@@ -8,8 +8,8 @@ class App(tk.Tk):
     # constant: display size of substation squares
     sq_size = 4
 
-    # constant: canvas size for scaling lat/long
-    grid_canvas_size = 1800
+    # state from user input: canvas size for scaling lat/long
+    grid_canvas_size = 1000
 
     # constant: toss distance percent for approximating sub locations that don't have coords
     toss_percent = 0.02
@@ -71,6 +71,11 @@ class App(tk.Tk):
         # simulation time
         self.time_label = ttk.Label(self.body, text="Time In Simulation: XX:XX")
 
+        # enter zoom
+        self.zoom_label = tk.Label(self.body, text="Zoom: ")
+        self.zoom_val = tk.StringVar()
+        self.zoom_input = ttk.Combobox(self.body, textvariable=self.zoom_val, width=5, state="readonly")
+
         # date input configuration
         self.dmonth_input.set("01")
         self.dmonth_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1,13))))
@@ -88,11 +93,16 @@ class App(tk.Tk):
         self.ampm_input.set("AM")
         self.ampm_input["values"] = ["AM", "PM"]
 
+        # zoom configuration
+        self.zoom_input.set("10%")
+        self.zoom_input["values"] = list(map(lambda val : str(val * 10) + '%', list(range(1, 21))))
+        self.zoom_input.bind('<<ComboboxSelected>>', self.execute_zoom)
+
         # widget placement
         self.body.grid(column=0, row=0, sticky=(N,W,E,S))
 
-        self.h_scroll.grid(column=0, row=2, columnspan=13, sticky=(W,S,E))
-        self.v_scroll.grid(column=13,row=1, rowspan=2, sticky=(N,S,E))
+        self.h_scroll.grid(column=0, row=2, columnspan=15, sticky=(W,S,E))
+        self.v_scroll.grid(column=15,row=1, rowspan=2, sticky=(N,S,E))
         self.grid_canvas.grid(column=0, row=1, columnspan=5, sticky=(N,W,E,S))
 
         self.load_btn.grid(column=0, row=0, sticky=(N,W))
@@ -110,6 +120,9 @@ class App(tk.Tk):
         self.minute_input.grid(column=10, row=0, sticky=(W,E))
         self.ampm_input.grid(column=11, row=0, sticky=(W,E))
         self.time_label.grid(column=12, row=0, sticky=(W,E), padx=5)
+
+        self.zoom_label.grid(column=13, row=0, sticky=(W,E))
+        self.zoom_input.grid(column=14, row=0, sticky=(W,E))
 
     def load_file_process_sections(self, section):
         "Helper to make file data splitting process more readable"
@@ -277,6 +290,13 @@ class App(tk.Tk):
     def clear_dyear(self, *args):
         self.dyear_input.delete(0, "end")
 
+    def execute_zoom(self, *args):
+        # update grid_canvas_size
+        self.grid_canvas_size = int(self.zoom_val.get()[:-1]) * 0.01 * 10000
+
+        # TODO: check if in view that can be zoomed
+        self.redraw_grid()
+
     # using https://stackoverflow.com/a/2450158
     # modified to work better for canvas purposes
     def long_to_x(self, long):
@@ -379,6 +399,46 @@ class App(tk.Tk):
             x_coord = self.long_to_x(self.min_long)
             y_coord = self.lat_to_y(i + self.min_lat)
             self.grid_canvas.create_text(x_coord, y_coord, text=str(int(i + self.min_lat)) + 'N', anchor='center', font=("Helvetica", 12, "bold"), fill='blue')
+
+    def redraw_grid(self):
+        # clear canvas
+        self.grid_canvas.delete("all")
+
+        # resize canvas
+        self.grid_canvas.itemconfigure("inner", width=self.grid_canvas_size, height=self.grid_canvas_size)
+        self.grid_canvas.configure(scrollregion=(0, 0, self.grid_canvas_size, self.grid_canvas_size))
+
+         # find branches that go between substations
+        unplaced_branches_btwn_subs = []
+        for i in range(len(self.branch_data)):
+            ids = self.branch_data[i]
+            from_bus = self.bus_data[ids[0]]
+            to_bus = self.bus_data[ids[1]]
+            from_sub_num = from_bus["sub_num"]
+            to_sub_num = to_bus["sub_num"]
+            if(from_sub_num != to_sub_num):
+                unplaced_branches_btwn_subs.append([from_sub_num, to_sub_num])
+
+        # place branches
+        for i in range(len(unplaced_branches_btwn_subs)):
+            ids = unplaced_branches_btwn_subs[i]
+            from_sub = self.substation_data[ids[0]]
+            to_sub = self.substation_data[ids[1]]
+
+            from_sub_lat = from_sub["lat"]
+            from_sub_long = from_sub["long"]
+            to_sub_lat = to_sub["lat"]
+            to_sub_long = to_sub["long"]
+
+            self.place_wire(from_sub_long, from_sub_lat, to_sub_long, to_sub_lat)
+
+        # draw all substations
+        for i in self.substation_data:
+            sub_to_place = self.substation_data[i]
+            self.place_sub(sub_to_place["long"], sub_to_place["lat"], i)
+
+        # draw grid labels
+        self.generate_axial_labels()
 
 if __name__ == "__main__":
     app = App()
