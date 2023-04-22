@@ -124,13 +124,17 @@ class App(tk.Tk):
         self.zoom_label.grid(column=13, row=0, sticky=(W,E))
         self.zoom_input.grid(column=14, row=0, sticky=(W,E))
 
+    ###########################
+    # State Loading Functions #
+    ###########################
+
     def load_file_process_sections(self, section):
         "Helper to make file data splitting process more readable"
         return list(map(lambda line : (' '.join(line.split())).split('"'), section.split('\n')))
 
     def load_file(self, *args):
         "Loads grid file in RAW format chosen by the user into state"
-        # FIXME: clear canvas/state
+        # FIXME: clear cached state
         filetypes = (("AUX files", "*.AUX"),)
 
         # open file
@@ -141,27 +145,33 @@ class App(tk.Tk):
             # get substation data
             substation_fdata = fdata[27][3:-1]
 
+            # extract relevant data and load into state
             located_substations_lat = []
             located_substations_long = []
             next_angle = 15
             for item in substation_fdata:
                 id = int(item[0])
                 coords = item[4].split(' ')
-                # FIXME: load substations without coords as having no coords
+
+                # substation w/o coordinates
                 if len(coords) == 2:
                     self.substation_data[id] = {"lat": None, "long": None, "next_angle": next_angle}
                     next_angle += 15
                     next_angle %= 360
                     continue
+
+                # get coordinates
                 lat = float(coords[1])
                 long = float(coords[2])
                 located_substations_lat.append(lat)
                 located_substations_long.append(long)
+
+                # give substations different angles for connecting substations w/o coordinates
                 self.substation_data[id] = {"lat": lat, "long": long, "next_angle": next_angle}
                 next_angle += 15
                 next_angle %= 360
 
-            # get limits
+            # load limits into state
             self.min_long = min(located_substations_long)
             self.min_lat = min(located_substations_lat)
             self.max_long = max(located_substations_long)
@@ -170,6 +180,7 @@ class App(tk.Tk):
             # get bus data
             bus_fdata = fdata[19][11:-1]
 
+            # load buses into state
             for item in bus_fdata:
                 id = int(item[0])
                 sub_num = int((item[2].split())[8])
@@ -178,57 +189,48 @@ class App(tk.Tk):
             # get branch data
             branch_fdata = fdata[23][12:-1]
 
+            # load branches into state
             for item in branch_fdata:
                 ids = item[0].split()
                 self.branch_data.append([int(ids[0]), int(ids[1])])
 
-            # find branches that go between substations
-            unplaced_branches_btwn_subs = []
-            for i in range(len(self.branch_data)):
-                ids = self.branch_data[i]
-                from_bus = self.bus_data[ids[0]]
-                to_bus = self.bus_data[ids[1]]
-                from_sub_num = from_bus["sub_num"]
-                to_sub_num = to_bus["sub_num"]
-                if(from_sub_num != to_sub_num):
-                    unplaced_branches_btwn_subs.append([from_sub_num, to_sub_num])
+            # get branches between substations
+            branches_btwn_subs = self.get_branches_btwn_subs()
 
-            print(len(unplaced_branches_btwn_subs))
-            print(len(self.branch_data))
-
-            # loop through branches until all are placed and all substations have locations
-            while(len(unplaced_branches_btwn_subs) != 0):
-                still_unplaced = []
-                for i in range(len(unplaced_branches_btwn_subs)):
-                    ids = unplaced_branches_btwn_subs[i]
+            # loop through branches until all substations have locations
+            while(len(branches_btwn_subs) != 0):
+                still_unlocated = []
+                for i in range(len(branches_btwn_subs)):
+                    # get data from state
+                    ids = branches_btwn_subs[i]
                     from_sub = self.substation_data[ids[0]]
                     to_sub = self.substation_data[ids[1]]
 
+                    # get coords
                     from_sub_lat = from_sub["lat"]
                     from_sub_long = from_sub["long"]
                     to_sub_lat = to_sub["lat"]
                     to_sub_long = to_sub["long"]
 
-                    # if no coords at all, skip for now
+                    # completely ignore branches where both subs have coords
+                    if(from_sub_lat != None and to_sub_lat):
+                        continue
+
+                    # if both subs have no coords, skip for now
                     if(from_sub_lat == None and to_sub_lat == None):
-                        still_unplaced.append(ids)
+                        still_unlocated.append(ids)
+                        continue
 
-                    # if both have coords, draw on map
-                    elif(from_sub_lat != None and to_sub_lat != None):
-                        self.place_wire(from_sub_long, from_sub_lat, to_sub_long, to_sub_lat)
+                    # remaining branches must have one sub with coords and one without
+                    # calculate vector for tossing sub
+                    toss_angle = from_sub["next_angle"]
+                    toss_magnitude = (self.max_long - self.min_long) * self.toss_percent
 
-                    # if only one has coords, toss other a percent distance away in a given direction
-                    elif(from_sub_lat != None and to_sub_lat == None):
-                        # calculate vector for tossing sub
-                        toss_angle = from_sub["next_angle"]
-                        toss_magnitude = (self.max_long - self.min_long) * self.toss_percent
-
+                    # toss sub from one end or the other
+                    if(from_sub_lat != None and to_sub_lat == None):
                         # toss sub
                         to_sub_lat = from_sub_lat + toss_magnitude * sin(radians(toss_angle))
                         to_sub_long = from_sub_long + toss_magnitude * cos(radians(toss_angle))
-
-                        # graph branch
-                        self.place_wire(from_sub_long, from_sub_lat, to_sub_long, to_sub_lat)
 
                         # update sub data
                         to_sub["lat"] = to_sub_lat
@@ -236,24 +238,19 @@ class App(tk.Tk):
                         to_sub["next_angle"] = toss_angle + 90
 
                     elif(from_sub_lat == None and to_sub_lat != None):
-                        # calculate vector for tossing sub
-                        toss_angle = from_sub["next_angle"]
-                        toss_magnitude = (self.max_long - self.min_long) * self.toss_percent
-
                         # toss sub
                         from_sub_lat = to_sub_lat + toss_magnitude * sin(radians(toss_angle))
                         from_sub_long = to_sub_long + toss_magnitude * cos(radians(toss_angle))
-
-                        # graph branch
-                        self.place_wire(from_sub_long, from_sub_lat, to_sub_long, to_sub_lat)
 
                         # update sub data
                         from_sub["lat"] = from_sub_lat
                         from_sub["long"] = from_sub_long
                         from_sub["next_angle"] = toss_angle + 90
 
-                unplaced_branches_btwn_subs = still_unplaced
+                # recurse
+                branches_btwn_subs = still_unlocated
 
+            # check if a substation failed to be located
             lost_count = 0
             for item in self.substation_data:
                 if(self.substation_data[item]["lat"] == None):
@@ -261,16 +258,13 @@ class App(tk.Tk):
 
             print("Lost count:", lost_count)
 
-            for i in self.substation_data:
-                sub_to_place = self.substation_data[i]
-                self.place_sub(sub_to_place["long"], sub_to_place["lat"], i)
+            # FIXME: load data into state
 
-            # set labels using limits
-            self.generate_axial_labels()
+            self.redraw_grid()
 
-            print(len(self.bus_data))
-
-            # TODO: load data into state
+    #########################
+    # Other Input Functions #
+    #########################
 
     def test_fn(self, *args):
         print("Button pressed.")
@@ -294,8 +288,12 @@ class App(tk.Tk):
         # update grid_canvas_size
         self.grid_canvas_size = int(self.zoom_val.get()[:-1]) * 0.01 * 10000
 
-        # TODO: check if in view that can be zoomed
+        # FIXME: check if in view that can be zoomed
         self.redraw_grid()
+
+    ##########################
+    # Grid Drawing Functions #
+    ##########################
 
     # using https://stackoverflow.com/a/2450158
     # modified to work better for canvas purposes
@@ -400,6 +398,22 @@ class App(tk.Tk):
             y_coord = self.lat_to_y(i + self.min_lat)
             self.grid_canvas.create_text(x_coord, y_coord, text=str(int(i + self.min_lat)) + 'N', anchor='center', font=("Helvetica", 12, "bold"), fill='blue')
 
+    def get_branches_btwn_subs(self):
+        branches_btwn_subs = []
+        for i in range(len(self.branch_data)):
+            # get data from state
+            ids = self.branch_data[i]
+            from_bus = self.bus_data[ids[0]]
+            to_bus = self.bus_data[ids[1]]
+            from_sub_num = from_bus["sub_num"]
+            to_sub_num = to_bus["sub_num"]
+
+            # filter branches within substations
+            if(from_sub_num != to_sub_num):
+                branches_btwn_subs.append([from_sub_num, to_sub_num])
+
+        return branches_btwn_subs
+
     def redraw_grid(self):
         # clear canvas
         self.grid_canvas.delete("all")
@@ -408,28 +422,23 @@ class App(tk.Tk):
         self.grid_canvas.itemconfigure("inner", width=self.grid_canvas_size, height=self.grid_canvas_size)
         self.grid_canvas.configure(scrollregion=(0, 0, self.grid_canvas_size, self.grid_canvas_size))
 
-         # find branches that go between substations
-        unplaced_branches_btwn_subs = []
-        for i in range(len(self.branch_data)):
-            ids = self.branch_data[i]
-            from_bus = self.bus_data[ids[0]]
-            to_bus = self.bus_data[ids[1]]
-            from_sub_num = from_bus["sub_num"]
-            to_sub_num = to_bus["sub_num"]
-            if(from_sub_num != to_sub_num):
-                unplaced_branches_btwn_subs.append([from_sub_num, to_sub_num])
+        # get branches between substations
+        branches_btwn_subs = self.get_branches_btwn_subs()
 
         # place branches
-        for i in range(len(unplaced_branches_btwn_subs)):
-            ids = unplaced_branches_btwn_subs[i]
+        for i in range(len(branches_btwn_subs)):
+            # get data from state
+            ids = branches_btwn_subs[i]
             from_sub = self.substation_data[ids[0]]
             to_sub = self.substation_data[ids[1]]
 
+            # get coords
             from_sub_lat = from_sub["lat"]
             from_sub_long = from_sub["long"]
             to_sub_lat = to_sub["lat"]
             to_sub_long = to_sub["long"]
 
+            # draw
             self.place_wire(from_sub_long, from_sub_lat, to_sub_long, to_sub_lat)
 
         # draw all substations
