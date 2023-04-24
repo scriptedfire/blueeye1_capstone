@@ -6,10 +6,10 @@ from math import sin, cos, radians
 
 class App(tk.Tk):
     # constant: display size of substation squares
-    sq_size = 4
+    sq_size = 6
 
     # state from user input: canvas size for scaling lat/long
-    grid_canvas_size = 10000
+    grid_canvas_size = 2000
 
     # constant: toss distance percent for approximating sub locations that don't have coords
     toss_percent = 0.02
@@ -26,12 +26,17 @@ class App(tk.Tk):
     branch_data = []
 
     # FIXME: view state
-    # FIXME: sub_boxes
 
     # state from grid (re)drawing: keys are tuples of (x, y)
     # vals are ids of substations touching that pixel
     # load_file also uses this temporarily but then calls redraw_grid which restores it
+    # primarily a diagnostic tool for identifying overlapping substations
     substation_pixels = {}
+
+    # state from grid (re)drawing: keys are substation ids
+    # vals are sets of substations overlapped by the given substation
+    # used for O(1) lookup of substations under a given substation
+    substations_overlapped_by_sub = {}
 
     def __init__(self):
         super().__init__()
@@ -207,6 +212,8 @@ class App(tk.Tk):
             # get branches between substations
             branches_btwn_subs = self.get_branches_btwn_subs()
 
+            # FIXME: adjust grid size for calculations
+
             # loop through branches until all substations have locations
             shift_count = 0
             ultrashift_count = 0
@@ -225,7 +232,6 @@ class App(tk.Tk):
                     to_sub_long = to_sub["long"]
 
                     # completely ignore branches where both subs have coords
-                    # FIXME: add both subs to pixel structure to mitigate overlaps?
                     if(from_sub_lat != None and to_sub_lat):
                         self.check_and_update_substation_pixels(ids[0], self.long_to_x(from_sub_long), self.lat_to_y(from_sub_lat))
                         self.check_and_update_substation_pixels(ids[1], self.long_to_x(to_sub_long), self.lat_to_y(to_sub_lat))
@@ -309,18 +315,13 @@ class App(tk.Tk):
                                     print("shifted")
                                     iterations = 0
                                     ultrashift_count += 1
-                        # toss sub
-                        #from_sub_lat = to_sub_lat + toss_magnitude * sin(radians(toss_angle))
-                        #from_sub_long = to_sub_long + toss_magnitude * cos(radians(toss_angle))
-
-                        # update sub data
-                        #from_sub["lat"] = from_sub_lat
-                        #from_sub["long"] = from_sub_long
-                        #from_sub["next_angle"] = toss_angle + 45
 
                 # recurse
                 branches_btwn_subs = still_unlocated
 
+            # FIXME: set grid size back
+
+            # FIXME: log to file rather than printing
             print("Shift count:",shift_count)
             print("Ultrashift count:",ultrashift_count)
 
@@ -364,6 +365,17 @@ class App(tk.Tk):
 
         # FIXME: check if in view that can be zoomed
         self.redraw_grid()
+
+    def grid_canvas_click(self, sub_num):
+        def event_handler(event):
+            print(sub_num, "at", event.x, event.y)
+
+            try:
+                print("plus:",self.substations_overlapped_by_sub[sub_num])
+            except KeyError:
+                None
+
+        return event_handler
 
     ##########################
     # Grid Drawing Functions #
@@ -417,8 +429,9 @@ class App(tk.Tk):
         # add pixels to grid mapping
         self.check_and_update_substation_pixels(sub_num, x_val, y_val, append_overlaps=True)
 
-        # place sub rectangle
+        # place sub rectangle and bind events
         rect_id = self.grid_canvas.create_rectangle((x_val, y_val, x_val + self.sq_size, y_val + self.sq_size), fill="#00ff40", tags=('palette', 'palettered'))
+        self.grid_canvas.tag_bind(rect_id, "<Button-1>", self.grid_canvas_click(sub_num))
         
         # place sub text
         self.grid_canvas.create_text(x_val + (self.sq_size / 2), y_val + (self.sq_size * 3), text='S' + str(sub_num), anchor='center', font=("Helvetica", 8), fill='black')
@@ -453,6 +466,7 @@ class App(tk.Tk):
             return self.grid_canvas.create_line(from_x_val, from_y_val + (self.sq_size / 2), to_x_val + self.sq_size, to_y_val + (self.sq_size / 2), fill="red", width=2)
         
         else:
+            # FIXME: log to file rather than printing
             print("strange values in place wire:")
             print(from_x_val, to_x_val, from_y_val, to_y_val)
         
@@ -540,21 +554,46 @@ class App(tk.Tk):
 
         # clear grid mapping state
         self.substation_pixels = {}
+        self.substations_overlapped_by_sub = {}
 
         # draw all substations
         for i in self.substation_data:
             sub_to_place = self.substation_data[i]
             self.place_sub(sub_to_place["long"], sub_to_place["lat"], i)
 
-        # get diagnostic information
+        # get overlapped substations
+        for i in self.substation_pixels:
+            subs = self.substation_pixels[i]
+
+            # ignore pixels with only one sub
+            if(len(subs) < 2):
+                continue
+
+            # for pixels with multiple subs, add those subs to each set of subs overlapped by each sub
+            for i in range(len(subs)):
+                # don't add self to set
+                subs_without_sub = []
+                for j in range(len(subs)):
+                    if j != i:
+                        subs_without_sub.append(subs[j])
+
+                # if sub hasn't been entered, create new set, otherwise unite new overlaps with existing set
+                try:
+                    self.substations_overlapped_by_sub[subs[i]] |= set(subs_without_sub)
+                except KeyError:
+                    self.substations_overlapped_by_sub[subs[i]] = set(subs_without_sub)
+
+        # get rest of diagnostic information
         overlaps_list = []
         overlaps_count = 0
-        for item in self.substation_pixels:
-            overlaps_list.append(len(self.substation_pixels[item]))
-            if(len(self.substation_pixels[item]) > 1):
+        for i in self.substation_pixels:
+            overlaps_list.append(len(self.substation_pixels[i]))
+            if(len(self.substation_pixels[i]) > 1):
                 overlaps_count += 1
 
         # print diagnostic information to console
+        # FIXME: log to file rather than printing
+        print("Substations with overlap:", len(self.substations_overlapped_by_sub))
         print("Pixels with overlap:", overlaps_count)
         if(len(overlaps_list) > 0):
             print("Worst overlap:", max(overlaps_list))
