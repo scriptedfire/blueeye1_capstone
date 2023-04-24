@@ -9,7 +9,7 @@ class App(tk.Tk):
     sq_size = 4
 
     # state from user input: canvas size for scaling lat/long
-    grid_canvas_size = 1000
+    grid_canvas_size = 10000
 
     # constant: toss distance percent for approximating sub locations that don't have coords
     toss_percent = 0.02
@@ -24,6 +24,14 @@ class App(tk.Tk):
     substation_data = {}
     bus_data = {}
     branch_data = []
+
+    # FIXME: view state
+    # FIXME: sub_boxes
+
+    # state from grid (re)drawing: keys are tuples of (x, y)
+    # vals are ids of substations touching that pixel
+    # load_file also uses this temporarily but then calls redraw_grid which restores it
+    substation_pixels = {}
 
     def __init__(self):
         super().__init__()
@@ -131,6 +139,8 @@ class App(tk.Tk):
     def load_file_process_sections(self, section):
         "Helper to make file data splitting process more readable"
         return list(map(lambda line : (' '.join(line.split())).split('"'), section.split('\n')))
+    
+    # FIXME: write locate substation helper function to organize loading process better
 
     def load_file(self, *args):
         "Loads grid file in RAW format chosen by the user into state"
@@ -198,6 +208,8 @@ class App(tk.Tk):
             branches_btwn_subs = self.get_branches_btwn_subs()
 
             # loop through branches until all substations have locations
+            shift_count = 0
+            ultrashift_count = 0
             while(len(branches_btwn_subs) != 0):
                 still_unlocated = []
                 for i in range(len(branches_btwn_subs)):
@@ -213,7 +225,10 @@ class App(tk.Tk):
                     to_sub_long = to_sub["long"]
 
                     # completely ignore branches where both subs have coords
+                    # FIXME: add both subs to pixel structure to mitigate overlaps?
                     if(from_sub_lat != None and to_sub_lat):
+                        self.check_and_update_substation_pixels(ids[0], self.long_to_x(from_sub_long), self.lat_to_y(from_sub_lat))
+                        self.check_and_update_substation_pixels(ids[1], self.long_to_x(to_sub_long), self.lat_to_y(to_sub_lat))
                         continue
 
                     # if both subs have no coords, skip for now
@@ -222,33 +237,92 @@ class App(tk.Tk):
                         continue
 
                     # remaining branches must have one sub with coords and one without
-                    # calculate vector for tossing sub
+                    # calculate initial vector for tossing sub
                     toss_angle = from_sub["next_angle"]
                     toss_magnitude = (self.max_long - self.min_long) * self.toss_percent
 
                     # toss sub from one end or the other
                     if(from_sub_lat != None and to_sub_lat == None):
-                        # toss sub
-                        to_sub_lat = from_sub_lat + toss_magnitude * sin(radians(toss_angle))
-                        to_sub_long = from_sub_long + toss_magnitude * cos(radians(toss_angle))
+                        toss_angle = from_sub["next_angle"]
+                        # recursively look for an unoccupied space to locate the sub (at 100% zoom)
+                        iterations = 0
+                        while(True):
+                            # toss sub
+                            to_sub_lat = from_sub_lat + toss_magnitude * sin(radians(toss_angle))
+                            to_sub_long = from_sub_long + toss_magnitude * cos(radians(toss_angle))
 
-                        # update sub data
-                        to_sub["lat"] = to_sub_lat
-                        to_sub["long"] = to_sub_long
-                        to_sub["next_angle"] = toss_angle + 90
+                            # get location at 100% zoom
+                            to_x = self.long_to_x(to_sub_long)
+                            to_y = self.lat_to_y(to_sub_lat)
+
+                            # check for overlap
+                            pixel_overlap = self.check_and_update_substation_pixels(ids[1], to_x, to_y)
+
+                            # if no overlap, locate substation there, otherwise change to a different vector and recurse
+                            if(pixel_overlap == 0):
+                                # update sub data
+                                to_sub["lat"] = to_sub_lat
+                                to_sub["long"] = to_sub_long
+                                from_sub["next_angle"] = toss_angle + 45
+                                self.substation_pixels[(to_x, to_y)] = [ids[1]]
+                                break
+                            else:
+                                shift_count += 1
+                                toss_angle += 15
+                                iterations += 1
+                                if(iterations > 24):
+                                    toss_magnitude = (self.max_long - self.min_long) * (self.toss_percent + 0.01)
+                                    print("shifted")
+                                    iterations = 0
+                                    ultrashift_count += 1
 
                     elif(from_sub_lat == None and to_sub_lat != None):
+                        # recursively look for an unoccupied space to locate the sub (at 100% zoom)
+                        toss_angle = to_sub["next_angle"]
+                        iterations = 0
+                        while(True):
+                            # toss sub
+                            from_sub_lat = to_sub_lat + toss_magnitude * sin(radians(toss_angle))
+                            from_sub_long = to_sub_long + toss_magnitude * cos(radians(toss_angle))
+
+                            # get location at 100% zoom
+                            from_x = self.long_to_x(from_sub_long)
+                            from_y = self.lat_to_y(from_sub_lat)
+
+                            # check for overlap
+                            pixel_overlap = self.check_and_update_substation_pixels(ids[1], from_x, from_y)
+
+                            # if no overlap, locate substation there, otherwise change to a different vector and recurse
+                            if(pixel_overlap == 0):
+                                # update sub data
+                                from_sub["lat"] = from_sub_lat
+                                from_sub["long"] = from_sub_long
+                                to_sub["next_angle"] = toss_angle + 45
+                                self.substation_pixels[(from_x, from_y)] = [ids[0]]
+                                break
+                            else:
+                                shift_count += 1
+                                toss_angle += 15
+                                iterations += 1
+                                if(iterations > 24):
+                                    toss_magnitude = (self.max_long - self.min_long) * (self.toss_percent + 0.01)
+                                    print("shifted")
+                                    iterations = 0
+                                    ultrashift_count += 1
                         # toss sub
-                        from_sub_lat = to_sub_lat + toss_magnitude * sin(radians(toss_angle))
-                        from_sub_long = to_sub_long + toss_magnitude * cos(radians(toss_angle))
+                        #from_sub_lat = to_sub_lat + toss_magnitude * sin(radians(toss_angle))
+                        #from_sub_long = to_sub_long + toss_magnitude * cos(radians(toss_angle))
 
                         # update sub data
-                        from_sub["lat"] = from_sub_lat
-                        from_sub["long"] = from_sub_long
-                        from_sub["next_angle"] = toss_angle + 90
+                        #from_sub["lat"] = from_sub_lat
+                        #from_sub["long"] = from_sub_long
+                        #from_sub["next_angle"] = toss_angle + 45
 
                 # recurse
                 branches_btwn_subs = still_unlocated
+
+            print("Shift count:",shift_count)
+            print("Ultrashift count:",ultrashift_count)
 
             # check if a substation failed to be located
             lost_count = 0
@@ -335,16 +409,19 @@ class App(tk.Tk):
 
         return int(lat)
 
-    def place_sub(self, long, lat, bus_num):
+    def place_sub(self, long, lat, sub_num):
         # convert lat/long to x/y
         x_val = self.long_to_x(long)
         y_val = self.lat_to_y(lat)
+
+        # add pixels to grid mapping
+        self.check_and_update_substation_pixels(sub_num, x_val, y_val, append_overlaps=True)
 
         # place sub rectangle
         rect_id = self.grid_canvas.create_rectangle((x_val, y_val, x_val + self.sq_size, y_val + self.sq_size), fill="#00ff40", tags=('palette', 'palettered'))
         
         # place sub text
-        self.grid_canvas.create_text(x_val + (self.sq_size / 2), y_val + (self.sq_size * 3), text='S' + str(bus_num), anchor='center', font=("Helvetica", 8), fill='black')
+        self.grid_canvas.create_text(x_val + (self.sq_size / 2), y_val + (self.sq_size * 3), text='S' + str(sub_num), anchor='center', font=("Helvetica", 8), fill='black')
 
         return rect_id
 
@@ -413,6 +490,26 @@ class App(tk.Tk):
                 branches_btwn_subs.append([from_sub_num, to_sub_num])
 
         return branches_btwn_subs
+    
+    def check_and_update_substation_pixels(self, sub_num, x_val, y_val, append_overlaps=False):
+        overlapped_pixels = 0
+        for i in range(self.sq_size):
+            for j in range(self.sq_size):
+                # form tuple
+                coords = (x_val + i, y_val + j)
+
+                # see if data exists at those coordinates
+                # if so append, otherwise create new list
+                try:
+                    pixel = self.substation_pixels[coords]
+                    overlapped_pixels += 1
+                    if(append_overlaps):
+                        (self.substation_pixels[coords]).append(sub_num)
+                except KeyError:
+                    self.substation_pixels[coords] = [sub_num]
+
+        return overlapped_pixels
+
 
     def redraw_grid(self):
         # clear canvas
@@ -441,10 +538,26 @@ class App(tk.Tk):
             # draw
             self.place_wire(from_sub_long, from_sub_lat, to_sub_long, to_sub_lat)
 
+        # clear grid mapping state
+        self.substation_pixels = {}
+
         # draw all substations
         for i in self.substation_data:
             sub_to_place = self.substation_data[i]
             self.place_sub(sub_to_place["long"], sub_to_place["lat"], i)
+
+        # get diagnostic information
+        overlaps_list = []
+        overlaps_count = 0
+        for item in self.substation_pixels:
+            overlaps_list.append(len(self.substation_pixels[item]))
+            if(len(self.substation_pixels[item]) > 1):
+                overlaps_count += 1
+
+        # print diagnostic information to console
+        print("Pixels with overlap:", overlaps_count)
+        if(len(overlaps_list) > 0):
+            print("Worst overlap:", max(overlaps_list))
 
         # draw grid labels
         self.generate_axial_labels()
