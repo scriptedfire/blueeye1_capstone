@@ -118,7 +118,7 @@ data/
 # other python files
 NC_File_reader.py
 data_processing.py
-
+Predicted*.csv
 # Spyder project settings
 .spyderproject
 .spyproject
