@@ -9,7 +9,7 @@ class App(tk.Tk):
     sq_size = 6
 
     # state from user input: canvas size for scaling lat/long
-    grid_canvas_size = 2000
+    grid_canvas_size = 1000
 
     # constant: toss distance percent for approximating sub locations that don't have coords
     toss_percent = 0.02
@@ -20,14 +20,19 @@ class App(tk.Tk):
     min_lat = 0
     min_long = 0
 
-    # state from file: grid data
+    # state from file: keys are substation ids
+    # vals are any data attached to a substation
     substation_data = {}
+
+    # state from file: keys are bus ids
+    # vals are any data attached to a bus
     bus_data = {}
-    branch_data = []
 
-    # FIXME: view state
+    # state from file: keys are tuples of (from_bus, to_bus)
+    # vals are any data attached to a branch
+    branch_data = {}
 
-    # state from grid (re)drawing: keys are tuples of (x, y)
+    # state from grid (re)drawing: keys are tuples of (x_val, y_val)
     # vals are ids of substations touching that pixel
     # load_file also uses this temporarily but then calls redraw_grid which restores it
     # primarily a diagnostic tool for identifying overlapping substations
@@ -110,6 +115,7 @@ class App(tk.Tk):
         self.zoom_input.set("10%")
         self.zoom_input["values"] = list(map(lambda val : str(val * 10) + '%', list(range(1, 21))))
         self.zoom_input.bind('<<ComboboxSelected>>', self.execute_zoom)
+        self.zoom_input.state(["disabled"])
 
         # widget placement
         self.body.grid(column=0, row=0, sticky=(N,W,E,S))
@@ -145,197 +151,189 @@ class App(tk.Tk):
         "Helper to make file data splitting process more readable"
         return list(map(lambda line : (' '.join(line.split())).split('"'), section.split('\n')))
     
-    # FIXME: write locate substation helper function to organize loading process better
+    def generate_sub_location(self, from_sub, to_sub, to_id):
+        "Helper for placing substations that don't have latitude and longitude defined"
+        # initialize diagnostic values
+        shift_count = 0
+        ultrashift_count = 0
+
+        toss_angle = from_sub["next_angle"]
+        toss_magnitude = (self.max_long - self.min_long) * self.toss_percent
+        # recursively look for an unoccupied space to locate the sub (at 100% zoom)
+        iterations = 0
+        while(True):
+            # toss sub
+            to_sub_lat = from_sub["lat"] + toss_magnitude * sin(radians(toss_angle))
+            to_sub_long = from_sub["long"] + toss_magnitude * cos(radians(toss_angle))
+
+            # get location at 100% zoom
+            to_x = self.long_to_x(to_sub_long)
+            to_y = self.lat_to_y(to_sub_lat)
+
+            # check for overlap
+            pixel_overlap = self.check_and_update_substation_pixels(to_id, to_x, to_y)
+
+            # if no overlap, locate substation there, otherwise change to a different vector and recurse
+            if(pixel_overlap == 0):
+                # update sub data
+                to_sub["lat"] = to_sub_lat
+                to_sub["long"] = to_sub_long
+                from_sub["next_angle"] = toss_angle + 45
+                break
+            else:
+                shift_count += 1
+                toss_angle += 15
+                iterations += 1
+                if(iterations > 24):
+                    toss_magnitude = (self.max_long - self.min_long) * (self.toss_percent + 0.01)
+                    iterations = 0
+                    ultrashift_count += 1
+        
+        # return diagnostics
+        return (shift_count, ultrashift_count)
 
     def load_file(self, *args):
         "Loads grid file in RAW format chosen by the user into state"
-        # FIXME: clear cached state
         filetypes = (("AUX files", "*.AUX"),)
 
         # open file
-        with fdialog.askopenfile(filetypes=filetypes) as grid_file:
-            # split file data into sections, sections into lines, and lines into values
-            fdata = list(map(self.load_file_process_sections, grid_file.read().split("\n\n")))
+        try:
+            with fdialog.askopenfile(filetypes=filetypes) as grid_file:
+                # FIXME: clear cached state after successfully opening file
+                # split file data into sections, sections into lines, and lines into values
+                fdata = list(map(self.load_file_process_sections, grid_file.read().split("\n\n")))
 
-            # get substation data
-            substation_fdata = fdata[27][3:-1]
+                # perform mapping calculations at %20 graph size
+                # (smallest before substation locating algorithm breaks down)
+                self.grid_canvas_size = 2000
 
-            # extract relevant data and load into state
-            located_substations_lat = []
-            located_substations_long = []
-            next_angle = 15
-            for item in substation_fdata:
-                id = int(item[0])
-                coords = item[4].split(' ')
+                # get substation data
+                substation_fdata = fdata[27][3:-1]
 
-                # substation w/o coordinates
-                if len(coords) == 2:
-                    self.substation_data[id] = {"lat": None, "long": None, "next_angle": next_angle}
+                # extract relevant data and load into state
+                located_substations_lat = []
+                located_substations_long = []
+                located_substations_ids = []
+                next_angle = 15
+                for item in substation_fdata:
+                    id = int(item[0])
+                    coords = item[4].split(' ')
+
+                    # substation w/o coordinates
+                    if len(coords) == 2:
+                        self.substation_data[id] = {"lat": None, "long": None, "next_angle": next_angle}
+                        next_angle += 15
+                        next_angle %= 360
+                        continue
+
+                    # get coordinates
+                    lat = float(coords[1])
+                    long = float(coords[2])
+                    located_substations_ids.append(id)
+                    located_substations_lat.append(lat)
+                    located_substations_long.append(long)
+
+                    # give substations different angles for connecting substations w/o coordinates
+                    self.substation_data[id] = {"lat": lat, "long": long, "next_angle": next_angle}
                     next_angle += 15
                     next_angle %= 360
-                    continue
 
-                # get coordinates
-                lat = float(coords[1])
-                long = float(coords[2])
-                located_substations_lat.append(lat)
-                located_substations_long.append(long)
+                # load limits into state
+                self.min_long = min(located_substations_long)
+                self.min_lat = min(located_substations_lat)
+                self.max_long = max(located_substations_long)
+                self.max_lat = max(located_substations_lat)
 
-                # give substations different angles for connecting substations w/o coordinates
-                self.substation_data[id] = {"lat": lat, "long": long, "next_angle": next_angle}
-                next_angle += 15
-                next_angle %= 360
+                # get bus data
+                bus_fdata = fdata[19][11:-1]
 
-            # load limits into state
-            self.min_long = min(located_substations_long)
-            self.min_lat = min(located_substations_lat)
-            self.max_long = max(located_substations_long)
-            self.max_lat = max(located_substations_lat)
+                # load buses into state
+                for item in bus_fdata:
+                    id = int(item[0])
+                    sub_num = int((item[2].split())[8])
+                    self.bus_data[id] = {"sub_num" : sub_num}
 
-            # get bus data
-            bus_fdata = fdata[19][11:-1]
+                # get branch data
+                branch_fdata = fdata[23][12:-1]
 
-            # load buses into state
-            for item in bus_fdata:
-                id = int(item[0])
-                sub_num = int((item[2].split())[8])
-                self.bus_data[id] = {"sub_num" : sub_num}
+                # load branches into state
+                for item in branch_fdata:
+                    ids = item[0].split()
+                    self.branch_data[(int(ids[0]), int(ids[1]))] = {}
 
-            # get branch data
-            branch_fdata = fdata[23][12:-1]
+                # get branches between substations
+                branches_btwn_subs = self.get_branches_btwn_subs()
 
-            # load branches into state
-            for item in branch_fdata:
-                ids = item[0].split()
-                self.branch_data.append([int(ids[0]), int(ids[1])])
+                # add located substations to overlap checking structure before doing locating
+                for i in range(len(located_substations_ids)):
+                    x_val = self.long_to_x(located_substations_long[i])
+                    y_val = self.lat_to_y(located_substations_lat[i])
+                    self.check_and_update_substation_pixels(located_substations_ids[i], x_val, y_val)
 
-            # get branches between substations
-            branches_btwn_subs = self.get_branches_btwn_subs()
+                # loop through branches until all substations have locations
+                shift_count = 0
+                ultrashift_count = 0
+                while(len(branches_btwn_subs) != 0):
+                    still_unlocated = []
+                    for i in range(len(branches_btwn_subs)):
+                        # get data from state
+                        ids = branches_btwn_subs[i]
+                        from_sub = self.substation_data[ids[0]]
+                        to_sub = self.substation_data[ids[1]]
 
-            # FIXME: adjust grid size for calculations
+                        # get coords
+                        from_sub_lat = from_sub["lat"]
+                        from_sub_long = from_sub["long"]
+                        to_sub_lat = to_sub["lat"]
+                        to_sub_long = to_sub["long"]
 
-            # loop through branches until all substations have locations
-            shift_count = 0
-            ultrashift_count = 0
-            while(len(branches_btwn_subs) != 0):
-                still_unlocated = []
-                for i in range(len(branches_btwn_subs)):
-                    # get data from state
-                    ids = branches_btwn_subs[i]
-                    from_sub = self.substation_data[ids[0]]
-                    to_sub = self.substation_data[ids[1]]
+                        # completely ignore branches where both subs have coords
+                        if(from_sub_lat != None and to_sub_lat):
+                            continue
 
-                    # get coords
-                    from_sub_lat = from_sub["lat"]
-                    from_sub_long = from_sub["long"]
-                    to_sub_lat = to_sub["lat"]
-                    to_sub_long = to_sub["long"]
+                        # if both subs have no coords, skip for now and pick up in later iteration
+                        if(from_sub_lat == None and to_sub_lat == None):
+                            still_unlocated.append(ids)
+                            continue
 
-                    # completely ignore branches where both subs have coords
-                    if(from_sub_lat != None and to_sub_lat):
-                        self.check_and_update_substation_pixels(ids[0], self.long_to_x(from_sub_long), self.lat_to_y(from_sub_lat))
-                        self.check_and_update_substation_pixels(ids[1], self.long_to_x(to_sub_long), self.lat_to_y(to_sub_lat))
-                        continue
+                        else:
+                            if(from_sub_lat != None and to_sub_lat == None):
+                                diagnostics = self.generate_sub_location(from_sub, to_sub, ids[1])
+                                shift_count += diagnostics[0]
+                                ultrashift_count += diagnostics[1]
+                            elif(from_sub_lat == None and to_sub_lat != None):
+                                diagnostics = self.generate_sub_location(to_sub, from_sub, ids[0])
+                                shift_count += diagnostics[0]
+                                ultrashift_count += diagnostics[1]
 
-                    # if both subs have no coords, skip for now
-                    if(from_sub_lat == None and to_sub_lat == None):
-                        still_unlocated.append(ids)
-                        continue
+                    # recurse
+                    branches_btwn_subs = still_unlocated
 
-                    # remaining branches must have one sub with coords and one without
-                    # calculate initial vector for tossing sub
-                    toss_angle = from_sub["next_angle"]
-                    toss_magnitude = (self.max_long - self.min_long) * self.toss_percent
+                # FIXME: log to file rather than printing
+                print("Shift count:",shift_count)
+                print("Ultrashift count:",ultrashift_count)
 
-                    # toss sub from one end or the other
-                    if(from_sub_lat != None and to_sub_lat == None):
-                        toss_angle = from_sub["next_angle"]
-                        # recursively look for an unoccupied space to locate the sub (at 100% zoom)
-                        iterations = 0
-                        while(True):
-                            # toss sub
-                            to_sub_lat = from_sub_lat + toss_magnitude * sin(radians(toss_angle))
-                            to_sub_long = from_sub_long + toss_magnitude * cos(radians(toss_angle))
+                # check if a substation failed to be located
+                lost_count = 0
+                for item in self.substation_data:
+                    if(self.substation_data[item]["lat"] == None):
+                        lost_count += 1
 
-                            # get location at 100% zoom
-                            to_x = self.long_to_x(to_sub_long)
-                            to_y = self.lat_to_y(to_sub_lat)
+                print("Lost count:", lost_count)
 
-                            # check for overlap
-                            pixel_overlap = self.check_and_update_substation_pixels(ids[1], to_x, to_y)
+                # FIXME: load data into state
 
-                            # if no overlap, locate substation there, otherwise change to a different vector and recurse
-                            if(pixel_overlap == 0):
-                                # update sub data
-                                to_sub["lat"] = to_sub_lat
-                                to_sub["long"] = to_sub_long
-                                from_sub["next_angle"] = toss_angle + 45
-                                self.substation_pixels[(to_x, to_y)] = [ids[1]]
-                                break
-                            else:
-                                shift_count += 1
-                                toss_angle += 15
-                                iterations += 1
-                                if(iterations > 24):
-                                    toss_magnitude = (self.max_long - self.min_long) * (self.toss_percent + 0.01)
-                                    print("shifted")
-                                    iterations = 0
-                                    ultrashift_count += 1
+                # reset grid size back to user-defined value before displaying
+                self.grid_canvas_size = int(self.zoom_val.get()[:-1]) * 0.01 * 10000
 
-                    elif(from_sub_lat == None and to_sub_lat != None):
-                        # recursively look for an unoccupied space to locate the sub (at 100% zoom)
-                        toss_angle = to_sub["next_angle"]
-                        iterations = 0
-                        while(True):
-                            # toss sub
-                            from_sub_lat = to_sub_lat + toss_magnitude * sin(radians(toss_angle))
-                            from_sub_long = to_sub_long + toss_magnitude * cos(radians(toss_angle))
+                self.redraw_grid()
 
-                            # get location at 100% zoom
-                            from_x = self.long_to_x(from_sub_long)
-                            from_y = self.lat_to_y(from_sub_lat)
-
-                            # check for overlap
-                            pixel_overlap = self.check_and_update_substation_pixels(ids[1], from_x, from_y)
-
-                            # if no overlap, locate substation there, otherwise change to a different vector and recurse
-                            if(pixel_overlap == 0):
-                                # update sub data
-                                from_sub["lat"] = from_sub_lat
-                                from_sub["long"] = from_sub_long
-                                to_sub["next_angle"] = toss_angle + 45
-                                self.substation_pixels[(from_x, from_y)] = [ids[0]]
-                                break
-                            else:
-                                shift_count += 1
-                                toss_angle += 15
-                                iterations += 1
-                                if(iterations > 24):
-                                    toss_magnitude = (self.max_long - self.min_long) * (self.toss_percent + 0.01)
-                                    print("shifted")
-                                    iterations = 0
-                                    ultrashift_count += 1
-
-                # recurse
-                branches_btwn_subs = still_unlocated
-
-            # FIXME: set grid size back
-
-            # FIXME: log to file rather than printing
-            print("Shift count:",shift_count)
-            print("Ultrashift count:",ultrashift_count)
-
-            # check if a substation failed to be located
-            lost_count = 0
-            for item in self.substation_data:
-                if(self.substation_data[item]["lat"] == None):
-                    lost_count += 1
-
-            print("Lost count:", lost_count)
-
-            # FIXME: load data into state
-
-            self.redraw_grid()
+                # enable zooming
+                self.zoom_input.state(["!disabled"])
+        
+        # ignore cancel hit on filedialog
+        except AttributeError:
+            None
 
     #########################
     # Other Input Functions #
@@ -363,7 +361,6 @@ class App(tk.Tk):
         # update grid_canvas_size
         self.grid_canvas_size = int(self.zoom_val.get()[:-1]) * 0.01 * 10000
 
-        # FIXME: check if in view that can be zoomed
         self.redraw_grid()
 
     def grid_canvas_click(self, sub_num):
@@ -491,9 +488,8 @@ class App(tk.Tk):
 
     def get_branches_btwn_subs(self):
         branches_btwn_subs = []
-        for i in range(len(self.branch_data)):
+        for ids in self.branch_data:
             # get data from state
-            ids = self.branch_data[i]
             from_bus = self.bus_data[ids[0]]
             to_bus = self.bus_data[ids[1]]
             from_sub_num = from_bus["sub_num"]
