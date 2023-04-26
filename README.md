@@ -3,7 +3,7 @@
  <img width=200px height=200px src="https://i.imgur.com/6wj0hh6.jpg" alt="Project logo"></a>
 </p>
 
-<h3 align="center">Project Title</h3>
+<h3 align="center">Space Weather Impact Tool for Power Grids</h3>
 
 <div align="center">
 
@@ -24,11 +24,6 @@
 
 - [About](#about)
 - [Getting Started](#getting_started)
-- [Deployment](#deployment)
-- [Usage](#usage)
-- [Built Using](#built_using)
-- [TODO](../TODO.md)
-- [Contributing](../CONTRIBUTING.md)
 - [Authors](#authors)
 - [Acknowledgments](#acknowledgement)
 
@@ -37,8 +32,6 @@
 The purpose of this project is to develop a tool that can assist electrical grid operators when there is a solar storm. The goal is to predict the effects that in incoming solar storm will have on the power grid so that operators can respond ahead of time instead of responding only in real time. To do this, the solar storm data is gathered from NOAA's website from the DISCOVR satellite at the L1 Lagrange point. This data is used with Tysganenko's TS05 model to predict what the surface magnetic fields will be. With this data, the surface electric fields can be calulated which will then allow the GICs to be calculated and the transformer heating. All of this information will then be displayed to the user in a GUI.
 
 ## 🏁 Getting Started <a name = "getting_started"></a>
-
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See [deployment](#deployment) for notes on how to deploy the project on a live system.
 
 
 ### Installing
@@ -58,13 +51,16 @@ The NOAASolarStormDataMiner.py is easy to test. Just call it with the informatio
 
 ## ✍️ Authors <a name = "authors"></a>
 
-- [@kylelobo](https://github.com/kylelobo) - Idea & Initial work
+- [@scriptedfire](https://github.com/scriptedfire) - GUI
+- [@KMMasters](https://github.com/KMMasters) - GIC and TTC
+- [@stephenhurt99](https://github.com/stephenhurt99) - Electric Field Calculator and NOAA data miner
 
-See also the list of [contributors](https://github.com/kylelobo/The-Documentation-Compendium/contributors) who participated in this project.
+See also the list of [contributors](https://github.com/scriptedfire/blueeye1_capstone/graphs/contributors) who participated in this project.
 
 ## 🎉 Acknowledgements <a name = "acknowledgement"></a>
 
 - References
+
   D. H. Boteler, R. J. Pirjola and L. Marti, "Analytic Calculation of 
   Geoelectric Fields Due to Geomagnetic Disturbances: A Test Case," 
   in IEEE Access, vol. 7, pp. 147029-147037, 2019, doi: 10.1109/ACCESS.2019.2945530.
