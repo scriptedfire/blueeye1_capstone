@@ -24,9 +24,10 @@ URL_DST = r"https://services.swpc.noaa.gov/json/geospace/geospace_dst_7_day.json
 FILE_Path = r"C:\\Users\\steph\\GitHub\\blueeye1_capstone\\Electric Field Calculator"
 
 def json_dst_to_pandas(json_object:object) -> pd.DataFrame:
-    "json object of dst data to a pndas dataframe for NOAA geospace_dst file"
-    #json_object = open(filename)
-    #plasma_data = json.load(json_object)
+    """ json object of dst data to a pandas dataframe for NOAA geospace_dst file
+        @param: json_object: json file object
+        return: pandas dataframe with json object data
+    """
     
     data_dict = {"time":[], "Dst":[]}
 
@@ -37,15 +38,16 @@ def json_dst_to_pandas(json_object:object) -> pd.DataFrame:
     return pd.DataFrame(data_dict, columns=["time", "Dst"])
 
 def json_storm_data_to_pandas(storm_data:object) -> pd.DataFrame:
-    """convert json file of predicted storm data to pandas dataframe"""
-    
-    
+    """ convert json file of predicted storm data to pandas dataframe
+        @param: storm_data: json object of solar storm data
+        return: df: pandas dataframe with the storm data
+    """    
     data_dict = {"time":[],"speed":[], "density":[], "Vx":[], "Vy":[], "Vz":[], "Bx":[], "By": [], "Bz":[]}
 
     for i, array in enumerate(storm_data):
         if i == 0:
             continue
-        data_dict["time"].append(array[11]) # 11
+        data_dict["time"].append(array[11]) 
         data_dict["speed"].append(array[1])
         data_dict["density"].append(array[2])
         data_dict["Bx"].append(array[4])
@@ -62,7 +64,11 @@ def json_storm_data_to_pandas(storm_data:object) -> pd.DataFrame:
     return df
 
 def storm_data_to_csv(df:pd.DataFrame, file_path) -> None:
-    """convert dataframe of predicted storm data to csv"""
+    """ convert dataframe of predicted storm data to csv
+        @param: df: pandas dataframe of data to send to csv
+        @param: file_path: location to store the csv
+        return: None: generate file and return None
+    """
     
     start_time = str(datetime.fromtimestamp(df["time"].iloc[0]))
     end_time = str(datetime.fromtimestamp(df["time"].iloc[-1])) 
@@ -116,10 +122,11 @@ def storm_data_dst_merge(data:pd.DataFrame, dst:pd.DataFrame) -> pd.DataFrame:
 
 
 
-def data_scraper(start_date:str,file:object, file_path:str = None) -> pd.DataFrame:
+def data_scraper(start_date:str, file:object, file_path:str = None) -> pd.DataFrame:
     """This is the function that will be called to run the data scraper
         @param: start_date: beggining date and time for which data is requested in UTC. 
         Must be more recent than 7 days and before the most distant prediction
+        @param: file: file object to append program progress (log file)
         @param: file_path: folder where the scraped data can be saved in a csv file
         return: pandas data from with the storm data including the dst index.
     """
@@ -166,7 +173,7 @@ def data_scraper(start_date:str,file:object, file_path:str = None) -> pd.DataFra
     # create file with the data if a file path is given
     if file_path:
         file.write("Saving data to file path...\n")
-        storm_data_to_csv(storm_data, file_path)
+        storm_data_to_csv(data, file_path)
         file.write("Data saved to file path.\n")
     
     return data

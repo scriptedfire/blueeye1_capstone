@@ -18,7 +18,13 @@ start = time.time()
         [1] N. A. Tsyganenko and M. I. Sitnov, Modeling the dynamics of the inner magnetosphere during
             strong geomagnetic storms, J. Geophys. Res., v. 110 (A3), A03208, doi: 10.1029/2004JA010798, 2005."""
 
-"""Notes:
+
+def Pdyn(rhoP: float, velocity: float) -> float:
+    """ This function calculates the solar wind dynamic pressure given the particle density, and solar wind speed
+        @param: rhoP: particle density in 1/cm^3
+        @param: velocity: solar wind speed in km/s
+        return: dynamicPressure_nP (nP)
+        Notes:
         Calculating solar wind dynamic pressure
         Pdyn = rho * V^2
         rho == mass density
@@ -29,13 +35,6 @@ start = time.time()
         solar wind speed units: km/s
         desnity units = 1/cm^3
         rho = density * (solar wind mass)
-"""
-
-def Pdyn(rhoP: float, velocity: float) -> float:
-    """ This function calculates the solar wind dynamic pressure given the particle density, and solar wind speed
-        @param: rhoP: particle density in 1/cm^3
-        @param: velocity: solar wind speed in km/s
-        return: dynamicPressure_nP (nP)
     """
     SOLAR_WIND_MASS = 2.3212 * 10 ** -27 #kg
 
@@ -50,7 +49,7 @@ def Pdyn(rhoP: float, velocity: float) -> float:
 
 
 def Sk(N: float, V: float, B : float, lamb: float, beta: float, gamma: float) -> float:
-    """This function is a subroutine of the Wi functions. It calculates a subfunciton of the sum computed in each function.
+    """ This function is a subroutine of the Wi functions. It calculates a subfunction of the sum computed in each function.
         @param: N: solar wind density
         @param: V: solar wind speed
         @param: B: magnitude of the southward component of the IMF
@@ -71,8 +70,7 @@ def Wt1(t : np.array, N : np.array, V : np.array, B : np.array) -> float:
         @param: N: numpy array that is the same length as t that has the solar wind density corresponding to the time point in t
         @param: V: numpy array that is the same length as t that has the solar wind speed corresponding to the time point in t
         @param: B: numpy array that is the same length as t that has the southward component of the IMF corresponding to the time point in t
-        @param: resolution: this is the resolution of the data passed in. i. e the time between measurements. The default is 5 minutes as in [1]
-          
+        return: Wt1: W parameter described in [1]  
     """
     resolution = (t[-1] - t[0]) / t.size
     if resolution == 0:
@@ -97,8 +95,7 @@ def Wt2(t : np.array, N : np.array, V : np.array, B : np.array) -> float:
         @param: N: numpy array that is the same length as t that has the solar wind density corresponding to the time point in t
         @param: V: numpy array that is the same length as t that has the solar wind speed corresponding to the time point in t
         @param: B: numpy array that is the same length as t that has the southward component of the IMF corresponding to the time point in t
-        @param: resolution: this is the resolution of the data passed in. i. e the time between measurements. The default is 5 minutes as in [1]
-          
+        return: Wt2: W parameter described in [1]   
     """
     resolution = (t[-1] - t[0]) / t.size
     if resolution == 0:
@@ -124,8 +121,7 @@ def Ws3(t : np.array, N : np.array, V : np.array, B : np.array) -> float:
         @param: N: numpy array that is the same length as t that has the solar wind density corresponding to the time point in t
         @param: V: numpy array that is the same length as t that has the solar wind speed corresponding to the time point in t
         @param: B: numpy array that is the same length as t that has the southward component of the IMF corresponding to the time point in t
-        @param: resolution: this is the resolution of the data passed in. i. e the time between measurements. The default is 5 minutes as in [1]
-          
+        return: Ws3: W parameter described in [1]   
     """
     resolution = (t[-1] - t[0]) / t.size
     if resolution == 0:
@@ -150,8 +146,7 @@ def Wp4(t : np.array, N : np.array, V : np.array, B : np.array) -> float:
         @param: N: numpy array that is the same length as t that has the solar wind density corresponding to the time point in t
         @param: V: numpy array that is the same length as t that has the solar wind speed corresponding to the time point in t
         @param: B: numpy array that is the same length as t that has the southward component of the IMF corresponding to the time point in t
-        @param: resolution: this is the resolution of the data passed in. i. e the time between measurements. The default is 5 minutes as in [1]
-          
+        return: Wp4: W parameter described in [1]   
     """
     resolution = (t[-1] - t[0]) / t.size
     if resolution == 0:
@@ -177,8 +172,7 @@ def Wr5(t : np.array, N : np.array, V : np.array, B : np.array) -> float:
         @param: N: numpy array that is the same length as t that has the solar wind density corresponding to the time point in t
         @param: V: numpy array that is the same length as t that has the solar wind speed corresponding to the time point in t
         @param: B: numpy array that is the same length as t that has the southward component of the IMF corresponding to the time point in t
-        @param: resolution: this is the resolution of the data passed in. i. e the time between measurements. The default is 5 minutes as in [1]
-          
+        return: Wr5: W parameter described in [1]   
     """
     resolution = (t[-1] - t[0]) / t.size
     if resolution == 0:
@@ -203,8 +197,7 @@ def Wr6(t : np.array, N : np.array, V : np.array, B : np.array) -> float:
         @param: N: numpy array that is the same length as t that has the solar wind density corresponding to the time point in t
         @param: V: numpy array that is the same length as t that has the solar wind speed corresponding to the time point in t
         @param: B: numpy array that is the same length as t that has the southward component of the IMF corresponding to the time point in t
-        @param: resolution: this is the resolution of the data passed in. i. e the time between measurements. The default is 5 minutes as in [1]
-          
+        return: Wr6: W parameter described in [1]   
     """
     resolution = (t[-1] - t[0]) / t.size
     if resolution == 0:
@@ -223,8 +216,12 @@ def Wr6(t : np.array, N : np.array, V : np.array, B : np.array) -> float:
     return Wr6
 
 def GPS_to_cartesian(longitude:float, latitude:float, elevation:float = 0) -> list:
-    """Converts gps coordiantes to geocentric cartesian coordinates in earth radii
+    """ Converts gps coordiantes to geocentric cartesian coordinates in earth radii
         elevations assumed to be in feet
+        @param: longitude: longitude expressed in degrees with East being positive
+        @param: latitude: latitude in degree with North Being positive
+        @param: elevation: altitude above sea level (feet)
+        return: x, y, z: the geo cartesian coordinates
     """
     Re  = 2.093e+7 # feet
     rho = 1 + elevation/Re
@@ -242,7 +239,10 @@ def GPS_to_cartesian(longitude:float, latitude:float, elevation:float = 0) -> li
 
 def cartesian_to_GPS(x:float, y:float, z:float) -> list:
     """ Converts geocentric cartesian coordinates to gps coordinates
-        This function calls the west and south direction negative"""
+        This function calls the west and south direction negative
+        @param: x, y, z: the geo cartesian coordinates
+        return: longitude, latitude: units are degrees and North and East are positive
+    """
 
     rho = np.sqrt(x**2 + y**2 + z**2)
 
@@ -322,14 +322,15 @@ def calculateBField(t: np.array, N: np.array, V: np.array, Bxgsm: np.array, Bygs
         @param: t: numpy array of time points where the first value is at the beginning of a solar storm
         @param: N: numpy array that is the same length as t that has the solar wind density corresponding to the time point in t
         @param: V: numpy array that is the same length as t that has the solar wind speed corresponding to the time point in t
-        @param: B: numpy array that is the same length as t that has the southward component of the IMF corresponding to the time point in t
         @param: Bxgsm: x component of the interplanetary magnetic field (IMF) in gsm coordinates
         @param: Bygsm: y component of the interplanetary magnetic field (IMF) in gsm coordinates
         @param: Bzgsm: z component of the interplanetary magnetic field (IMF) in gsm coordinates
-        @param: longitude: float of the longitude where the B field is being evaluated
-        @param: latitude: float of the longitude where the B field is being evaluated
+        @param: Vxgsm: x component of the solar wind in gsm coordinates
+        @param: Vygsm: y component of the solar wind in gsm coordinates
+        @param: Vzgsm: z component of the solar wind in gsm coordinates
+        @param: longitudeCBF: float of the longitude where the B field is being evaluated
+        @param: latitudeCBF: float of the latitude where the B field is being evaluated
         @param: dst: most recent dst index in nT
-        @param: resolution: this is the resolution of the data passed in. i. e the time between measurements. The default is 5 minutes as in [1]
         return: Bxgeo, Bygeo, Bzgeo predicted magnetic field vector
     """
     gpack.recalc(t[-1])
@@ -364,7 +365,7 @@ def calculateBField(t: np.array, N: np.array, V: np.array, Bxgsm: np.array, Bygs
     # e = east component (y)
     # n = north component (x)
     # u = upward component (z)
-    h = 0# 6371.2
+    h = 0
     
     Be, Bn, Bu = ppigrf.igrf(longitudeCBF, latitudeCBF, h, datetime.fromtimestamp(t[-1]))
     e, n, u = geo_to_enu(Bxgeo, Bygeo, Bzgeo, longitudeCBF, latitudeCBF)
@@ -376,14 +377,14 @@ def calculateBField(t: np.array, N: np.array, V: np.array, Bxgsm: np.array, Bygs
 def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_longitude: float, min_latitude:float, max_latitude:float, granularity:float) -> pd.DataFrame:
     """ Take in strom data in a pandas dataframe each column will be a different data type. The rows will be time points
         @param: storm_data: Multiindex pandas dataframe. First index is a time point, 
-        second is longitude, third is latitude. The columns are the components of the IMF
+        second is longitude, third is latitude. The columns are the solar storm data
         @param: min_longitude: minimum longitude in degrees
         @param: max_longitude: maximum longitude in degrees
         @param: min_latitude: minimum latitude in degrees
         @param: max_latitude: maximum latitude in degrees
         @param: granularity: the step size between GPS coordinates. This parameter has a strong effect on computation time.
         The above five parameters form a grid where the magnetic field vector will be calculated for each time point
-        return: pandas dataframe with the total magnetic field vector (nT) at each time (sec) and location long,lat (degrees)
+        return: pandas dataframe with the total magnetic field vector (nT) at each time (sec) and location long, lat (degrees)
     """
     longitude_vector = np.arange(min_longitude, max_longitude, granularity)
     latitude_vector = np.arange(min_latitude, max_latitude, granularity)

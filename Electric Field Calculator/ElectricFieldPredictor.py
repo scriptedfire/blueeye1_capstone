@@ -3,7 +3,6 @@ import numpy as np
 import cmath
 from math import *
 import pandas as pd
-import matplotlib.pyplot as plt
 from scipy.fft import fft, ifft, fftfreq
 import MagneticFieldPredictor
 
@@ -75,7 +74,7 @@ def k_f(impedance_data:pd.DataFrame, f:float) -> complex:
 def B_to_E(conductivity_model: pd.DataFrame, B:np.array, time:np.array, sign:int) -> np.array:
     """ This method performs the convolution in the frequency domain 
         to obtain the electric field from the magnetic field.
-        @param: conductivity_model: dataframe of the 1-D layer Earth conductivity
+        @param: conductivity_model: dataframe of the 1-D layer Earth resistivity
         @param: B:                  array of B field direction
         @param: time:               array of corresponding time stamps
         @param: sign:               The y direction gets a negative sign. This parameter allows this to be done
@@ -85,14 +84,15 @@ def B_to_E(conductivity_model: pd.DataFrame, B:np.array, time:np.array, sign:int
     
     # interpolate B field to be spaced by 60 seconds
     #############################################
-    # Comment these 3 lines out to test
+    # Comment these 3 lines out to test with Electric_field_calculator_test_bench.py
     x_array_B_field = np.arange(time[0], time[time.size - 1], 60)
-
+    
     B = np.interp(x_array_B_field, time, B)
-
+    
     time = x_array_B_field
 
     ###########################################
+    
     
     B_fd = fft(B*10**(-9))
     
@@ -102,10 +102,10 @@ def B_to_E(conductivity_model: pd.DataFrame, B:np.array, time:np.array, sign:int
     freq = fftfreq(time.size, time_step)
     
     impedance_vector = np.zeros(B.size, dtype=complex)
+    # DC is not meaningful, make this frequency very very low
     freq[0] = 0.000001
     for i in range(B.size):
         impedance_vector[i] = k_f(conductivity_model, freq[i])
-    
     
     E_fd = np.zeros(B_fd.size, dtype=complex)
 
@@ -116,11 +116,11 @@ def B_to_E(conductivity_model: pd.DataFrame, B:np.array, time:np.array, sign:int
 
     E = np.real(E) * sign * 1000 # multiply by sign and 1000 to get it in V/km in the correct direction
     
-
-    
-    for i in range(30):
-        E[i] = E[30]
-        E[E.size - i- 1] = E[E.size - 1 - 30]
+    # Remove as much aliasing as possible
+    if E.size >= 60:
+        for i in range(60):
+            E[i] = E[60]
+            E[E.size - i- 1] = E[E.size - 1 - 60]
     
     
     return E
@@ -203,7 +203,9 @@ def ElectricFieldCalculator(resistivity_data:pd.DataFrame, storm_data:pd.DataFra
         log_file.write(e)
         log_file.write('\n')
         return e
-    print(B_field_data)
+    print('\n',"              Magnetic Field Data\n")
+    print(B_field_data, flush=True)
+    print('\n')
     log_file.write("Magnetic field calculation complete.\nCalculating electric field from predicted magnetic field...\n")
     try:
         E_Field = calculate_e_field(resistivity_data, B_field_data)
