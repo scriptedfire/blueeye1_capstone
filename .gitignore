@@ -135,6 +135,5 @@ data_processing.py
 .dmypy.json
 dmypy.json
 Predicted*.csv
-EarthSunStorm.png
 # Pyre type checker
 .pyre/

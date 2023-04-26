@@ -8,8 +8,8 @@
 <div align="center">
 
 [![Status](https://img.shields.io/badge/status-active-success.svg)]()
-[![GitHub Issues](https://img.shields.io/github/issues/kylelobo/The-Documentation-Compendium.svg)](https://github.com/scriptedfire/blueeye1_capstone/issues)
-[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/kylelobo/The-Documentation-Compendium.svg)](https://github.com/scriptedfire/blueeye1_capstone/pulls)
+[![GitHub Issues](https://img.shields.io/github/issues/scriptedfire/blueeye1_capstone.svg)](https://github.com/scriptedfire/blueeye1_capstone/issues)
+[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/scriptedfire/blueeye1_capstone.svg)](https://github.com/scriptedfire/blueeye1_capstone/pulls)
 
 </div>
 
