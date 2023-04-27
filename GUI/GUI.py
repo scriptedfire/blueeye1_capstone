@@ -761,7 +761,7 @@ class App(tk.Tk):
         else:
             # kill simulation loop
             self.sim_running = False
-            self.sim_thread.join()
+            self.sim_thread.join(0.5)
 
             # reopen database
             self.core.reopen_conns()
@@ -778,7 +778,7 @@ class App(tk.Tk):
     def on_closing(self):
         if(self.sim_running):
             self.sim_running = False
-            self.sim_thread.join()
+            self.sim_thread.join(0.5)
 
         self.destroy()
 
