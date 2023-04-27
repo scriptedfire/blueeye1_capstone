@@ -4,13 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="8ecf9fc9-a430-4060-8126-d6a302a7f78b" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/total_heatup.csv" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/warnings_generated.csv" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver.py" beforeDir="false" afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/Transformer Thermal Capacity.py" beforeDir="false" afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/Transformer Thermal Capacity.py" afterDir="false" />
-    </list>
+    <list default="true" id="8ecf9fc9-a430-4060-8126-d6a302a7f78b" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
