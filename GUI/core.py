@@ -9,6 +9,8 @@ class Core():
         # load on file db into memory
         self.backup_db_conn.backup(self.db_conn)
 
+        self.log_to_file("Core", "Core Initialized")
+
     def save_to_file(self):
         self.db_conn.backup(self.backup_db_conn)
 
@@ -47,15 +49,14 @@ class Core():
         )""")
 
         transaction.execute("""CREATE TABLE IF NOT EXISTS Simulation (
-        SIM_ID integer PRIMARY KEY,
         GRID_NAME text NOT NULL,
         START_TIME text NOT NULL,
+        PRIMARY KEY (GRID_NAME, START_TIME),
         FOREIGN KEY (GRID_NAME) REFERENCES Grid (GRID_NAME)
         )""")
 
         transaction.execute("""CREATE TABLE IF NOT EXISTS Datapoint (
-        DPOINT_ID integer PRIMARY KEY,
-        SIM_ID integer NOT NULL,
+        START_TIME text NOT NULL,
         FROM_BUS integer NOT NULL,
         TO_BUS integer NOT NULL,
         GRID_NAME text NOT NULL,
@@ -63,6 +64,7 @@ class Core():
         DPOINT_GIC real NOT NULL,
         DPOINT_VLEVEL real,
         DPOINT_TTC real,
+        PRIMARY KEY (START_TIME, FROM_BUS, TO_BUS, GRID_NAME),
         FOREIGN KEY (FROM_BUS, TO_BUS, GRID_NAME) REFERENCES Branch (FROM_BUS, TO_BUS, GRID_NAME)
         )""")
 
@@ -133,27 +135,31 @@ class Core():
 
         transaction.close()
 
-    # FIXME: log prints to file
+    # FIXME: log prints to file only
     def load_grid_data(self, grid_name, substation_data, bus_data, branch_data):
         self.initialize_tables()
 
         # ignore if grid already exists
         if(self.add_grid_if_not_exists(grid_name) == None):
+            self.log_to_file("Core", "Grid Already Exists")
             print("Grid Already Exists")
             return
         
+        self.log_to_file("Core", "Grid Added")
         print("Grid Added")
         
         for sub_num in substation_data:
             sub = substation_data[sub_num]
             self.add_substation(grid_name, sub_num, sub["lat"], sub["long"])
 
+        self.log_to_file("Core", "Substations Added")
         print("Substations Added")
 
         for bus_num in bus_data:
             bus = bus_data[bus_num]
             self.add_bus(bus_num, bus["sub_num"], grid_name)
 
+        self.log_to_file("Core", "Buses Added")
         print("Buses Added")
 
         for branch in branch_data:
@@ -161,6 +167,15 @@ class Core():
             to_bus_num = branch[1]
             self.add_branch_and_transformer(from_bus_num, to_bus_num, branch_data[branch]["has_trans"], grid_name)
 
+        self.log_to_file("Core", "Branches Added")
         print("Branches Added")
 
         self.save_to_file()
+
+    ###################
+    # Misc. Functions #
+    ###################
+
+    def log_to_file(self, source, msg):
+        with open("log.txt", "a+") as logfile:
+            logfile.write("From " + source + ": " + msg + "\n")
