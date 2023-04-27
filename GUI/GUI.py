@@ -4,6 +4,9 @@ from tkinter import ttk
 from tkinter import filedialog as fdialog
 from tkinter import messagebox
 from math import sin, cos, radians
+from datetime import datetime, timedelta
+from threading import Thread
+from time import sleep
 from core import Core
 
 class App(tk.Tk):
@@ -24,6 +27,9 @@ class App(tk.Tk):
     max_long = 0
     min_lat = 0
     min_long = 0
+
+    # state from file: name of currently loaded grid
+    grid_name = ""
 
     # state from file: keys are substation ids
     # vals are any data attached to a substation
@@ -65,8 +71,12 @@ class App(tk.Tk):
     # state from user input: start of simulation
     start_time = None
 
-    # state from running simulation: current time in simulation
-    sim_time = None
+    # state from running simulation: is sim running?, current time in simulation, and sim loop object
+    sim_running = False
+    sim_time = datetime(1970, 1, 1, 1, 1)
+
+    # state from running simulation: for pause/play to work if grid is switched
+    grid_name_at_sim_start = ""
 
     def __init__(self):
         super().__init__()
@@ -74,6 +84,9 @@ class App(tk.Tk):
         self.title("Space Weather Analysis Tool")
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
+
+        # set up closing function for killing sim on the way out
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         self.create_body_frame()
         self.core = Core()
@@ -87,7 +100,7 @@ class App(tk.Tk):
 
         # buttons
         self.load_btn = ttk.Button(self.body, text="Load Grid File", command=self.load_file)
-        self.play_btn = ttk.Button(self.body, text="Play/Pause Simulation", command=self.test_fn)
+        self.play_btn = ttk.Button(self.body, text="Play/Pause Simulation", command=self.play_or_pause_sim)
         self.date_label = ttk.Label(self.body, text="Solar Storm Date:")
 
         # enter date
@@ -283,7 +296,7 @@ class App(tk.Tk):
             current_row = 2
 
             # create branch label
-            branch_label = ttk.Label(self.bus_frame, text="To " + str(to_buses[i]) + ":")
+            branch_label = ttk.Label(self.bus_frame, text="To " + str(to_buses[i]) + " at Sub " + str(self.bus_data[to_buses[i]]["sub_num"]) + ":")
             branch_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
             self.branch_display_vals[branches[i]] = {"branch_label":branch_label}
             current_row += 1
@@ -310,6 +323,9 @@ class App(tk.Tk):
         # create back button
         self.back_to_sub_btn = ttk.Button(self.body, text="Back", command=self.back_to_sub(sub_nums))
         self.back_to_sub_btn.grid(column=0, row=6, sticky=(N,W), pady=16, padx=4)
+
+        # put bus_num in state for sim
+        self.bus_view_bus_num = bus_num
 
         # declare view as active
         self.bus_view_active = True
@@ -523,16 +539,18 @@ class App(tk.Tk):
 
                 self.core.log_to_file("GUI", "Lost count: " + str(lost_count))
 
-                self.core.load_grid_data(grid_file.name[:-4], self.substation_data, self.bus_data, self.branch_data)
+                self.grid_name = grid_file.name[:-4]
 
-                # enable simulating
-                self.play_btn.state(["!disabled"])
+                self.core.load_grid_data(self.grid_name, self.substation_data, self.bus_data, self.branch_data)
 
                 # reset grid size back to user-defined value before displaying
                 self.grid_canvas_size = int(self.zoom_val.get()[:-1]) * 0.01 * 10000
 
                 self.redraw_grid()
-                self.title("Space Weather Analysis Tool: " + grid_file.name[:-4])
+                self.title("Space Weather Analysis Tool: " + self.grid_name)
+
+                # enable simulating
+                self.play_btn.state(["!disabled"])
         
         # ignore cancel hit on filedialog
         except AttributeError:
@@ -627,10 +645,140 @@ class App(tk.Tk):
             self.create_sub_view(sub_nums)
 
         return event_handler
-    
-    # FIXME: Simulation Functions
-    # Lock all time and date inputs when simulation is running
-    # Sim update loop uses state to know what values to update
+
+    ########################
+    # Simulation Functions #
+    ########################
+
+    # https://pythonguides.com/python-tkinter-colors/
+    def rgb_hack(self, rgb):
+        return "#%02x%02x%02x" % rgb  
+
+    def simulation_loop(self):
+        "The gremlin that runs around and bangs on things."
+        local_core = Core()
+        local_core.log_to_file("GUI", "Local Core Online")
+        while(self.sim_running):
+            # update time label
+            self.time_label["text"] = "Time In Simulation: " + self.sim_time.strftime("%I:%M %p")
+
+            # load data for minute
+            time_data = local_core.get_data_for_time(self.grid_name, self.sim_time)
+
+            gics = []
+            for point in time_data:
+                gics.append(point[4])
+
+            max_gic = max(gics)
+            min_gic = min(gics)
+
+            if(self.grid_canvas_active):
+                # update all branch colors
+                for point in time_data:
+                    try:
+                        branch_ids = (point[0], point[1])
+                        branch = self.branch_data[branch_ids]
+                        try:
+                            line_id = branch["line_id"]
+                            gic = point[4]
+
+                            # normalize gic
+                            normalized = (gic - min_gic) / (max_gic - min_gic)
+
+                            # red is max gic, blue is min gic
+                            self.grid_canvas.itemconfig(line_id, fill=self.rgb_hack((int(255 * normalized), 0, int(255 * (1 - normalized)))))
+                        except KeyError:
+                            continue
+                    except:
+                        break
+
+            elif(self.bus_view_active):
+                # update all labels
+                try:
+                    branches = self.get_branches_for_bus(self.bus_view_bus_num)
+                    for point in time_data:
+                        branch_ids = (point[0], point[1])
+                        if(branch_ids in branches):
+                            labels = self.branch_display_vals[branch_ids]
+                            labels["GIC_label"]["text"] = "GIC: " + str(point[4])
+                            if(self.branch_data[branch_ids]["has_trans"]):
+                                labels["VLEVEL_label"]["text"] = "VLEVEL: " + str(point[5])
+                                labels["TTC_label"]["text"] = "TTC: " + str(point[6])
+                except:
+                    continue
+
+            # update sim time
+            sleep(1)
+            self.sim_time += timedelta(minutes=1)
+            if(self.sim_time == (self.start_time + timedelta(minutes=59))):
+                self.sim_time = self.start_time
+
+    def play_or_pause_sim(self, *args):
+        if(self.sim_running == False):
+            # lock inputs
+            self.dmonth_input.state(["disabled"])
+            self.dday_input.state(["disabled"])
+            self.dyear_input.state(["disabled"])
+            self.hour_input.state(["disabled"])
+            self.minute_input.state(["disabled"])
+            self.ampm_input.state(["disabled"])
+            self.load_btn.state(["disabled"])
+
+            # load date and time
+            month = int(self.dmonth_val.get())
+            day = int(self.dday_val.get())
+            year = int(self.dyear_val.get())
+            hour = int(self.hour_val.get())
+            minute = int(self.minute_input.get())
+            ampm = self.ampm_input.get()
+
+            if(ampm == "PM"):
+                hour += 12
+
+            # create start datetime
+            set_start_time = datetime(year, month, day, hour, minute)
+
+            # set sim_time if out of range, otherwise use existing value
+            if(self.sim_time < set_start_time or self.sim_time > (set_start_time + timedelta(minutes=59))):
+                self.sim_time = set_start_time
+
+            # load hour into database
+            if(self.start_time != set_start_time or self.grid_name != self.grid_name_at_sim_start):
+                self.start_time = set_start_time
+                self.grid_name_at_sim_start = self.grid_name
+                self.core.create_hour_of_data(self.grid_name, self.start_time)
+                messagebox.showinfo("Loaded!", "Simulation has been loaded!")
+
+            # close database here so sim thread can connect
+            self.core.close_conns()
+
+            # start simulation loop
+            self.sim_running = True
+            self.sim_thread = Thread(target=self.simulation_loop)
+            self.sim_thread.start()
+        else:
+            # kill simulation loop
+            self.sim_running = False
+            self.sim_thread.join()
+
+            # reopen database
+            self.core.reopen_conns()
+
+            # unlock inputs
+            self.dmonth_input.state(["!disabled"])
+            self.dday_input.state(["!disabled"])
+            self.dyear_input.state(["!disabled"])
+            self.hour_input.state(["!disabled"])
+            self.minute_input.state(["!disabled"])
+            self.ampm_input.state(["!disabled"])
+            self.load_btn.state(["!disabled"])
+
+    def on_closing(self):
+        if(self.sim_running):
+            self.sim_running = False
+            self.sim_thread.join()
+
+        self.destroy()
 
     ########################
     # Conversion Functions #

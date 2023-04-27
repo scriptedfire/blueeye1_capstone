@@ -208,16 +208,28 @@ class Core():
 
         self.save_to_file()
 
-    def get_data_for_time(self, grid_name, dpoint_time):
+    def get_data_for_time(self, grid_name, timepoint):
         transaction = self.db_conn.cursor()
 
-        transaction.execute("""SELECT * FROM Datapoint WHERE GRID_NAME=? AND DPOINT_TIME=?""", (grid_name, dpoint_time))
+        transaction.execute("""SELECT * FROM Datapoint WHERE GRID_NAME=? AND DPOINT_TIME=?""", (grid_name, timepoint.strftime("%m/%d/%Y, %H:%M:%S")))
 
         data = transaction.fetchall()
 
         transaction.close()
 
         return data
+    
+    def close_conns(self):
+        self.backup_db_conn.close()
+        self.db_conn.close()
+
+    def reopen_conns(self):
+        # initialize in memory and on file db
+        self.db_conn = sqlite3.connect(":memory:")
+        self.backup_db_conn = sqlite3.connect("state.db")
+
+        # load on file db into memory
+        self.backup_db_conn.backup(self.db_conn)
 
 if __name__ == "__main__":
     testcore = Core()
