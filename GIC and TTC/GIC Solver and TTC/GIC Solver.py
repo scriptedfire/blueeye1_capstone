@@ -603,32 +603,32 @@ six_bus_field = np.array([[[10, 0]]])
 # using function above to create an array that holds the line data
 # this data is from a local csv file, but after integration will be coming from database
 # csv file holds same data as that provided in Overbye test case paper
-line_array = csv_to_array("/Users/madelineburrows/Desktop/ECEN 403/Line Data.csv")
+line_array = csv_to_array("Line Data.csv")
 # format of data: Line number, From Bus, To Bus, Voltage (kV-LL), Length (miles), Resistance (ohm/phase), series cap
 
 
 # this array has the same format, but is for the smaller test case from NERC
-six_bus_line_array = csv_to_array("/Users/madelineburrows/Desktop/ECEN 403/6 Bus Line Data.csv")
+six_bus_line_array = csv_to_array("6 Bus Line Data.csv")
 
 # this array is similar to the one above, but this will hold the substation data
-substation_array = csv_to_array("/Users/madelineburrows/Desktop/ECEN 403/Substation Data.csv")
+substation_array = csv_to_array("Substation Data.csv")
 # format of data: Substation Name/Number,	Latitude,	Longitude,	Grounding Resistance (Ohm),	Low Bus,	High Bus
 # the low bus and high bus parameters were inferred from the diagram of the system provided in the test case paper
 # these bus numbers weren't provided in the tables in the paper, but are very necessary for the calculations
 
 # this array holds the info for the substations in the smaller test case
-six_bus_sub_array = csv_to_array("/Users/madelineburrows/Desktop/ECEN 403/6 Bus Substation.csv")
+six_bus_sub_array = csv_to_array("6 Bus Substation.csv")
 
 # this array holds the transformer data from the smaller test case
-six_bus_transformer_array = csv_to_array("/Users/madelineburrows/Desktop/ECEN 403/6 Bus Transformer Data.csv")
+six_bus_transformer_array = csv_to_array("6 Bus Transformer Data.csv")
 # array format: Name, Type, Resistance W1,	Bus No1, Resistance W2,	Bus No2, Blocking Device
 
 # this array holds the same data as the array above, but this one includes a GIC blocking device on transformer 1
 # using this array to illustrate that code can account for blocking device
-six_bus_trans_array_w_bd = csv_to_array("/Users/madelineburrows/Desktop/ECEN 403/6 Bus Transformer Data w_ GIC BD.csv")
+six_bus_trans_array_w_bd = csv_to_array("6 Bus Transformer Data w_ GIC BD.csv")
 
 # array to hold 20 bus transformer data
-transformer_array = csv_to_array('/Users/madelineburrows/Desktop/ECEN 403/Transformer Data .csv')
+transformer_array = csv_to_array('Transformer Data .csv')
 
 line_data = grab_line_cords(line_array, substation_array)
 log_message('Locating transmission line end points for 20 bus case')
