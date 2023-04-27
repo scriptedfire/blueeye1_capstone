@@ -35,7 +35,7 @@ The purpose of this project is to develop a tool that can assist electrical grid
 
 ### Installing
 
-To use this code, dowload it from GitHub and execute pip install requirements.txt in your virtual environment.
+To use this code, download it from GitHub and execute pip install requirements.txt in your virtual environment.
 
 
 ## 🔧 Running the tests <a name = "tests"></a>
@@ -47,6 +47,7 @@ To see the test results of the MagneticFieldPrediction. Just run the Tysganenko_
 
 The NOAASolarStormDataMiner.py is easy to test. Just call it with the information described in the parent function and it will return the data from NOAA. 
 
+To test the Transformer Thermal Capacity script, simply run the code and input the desired transformer model when prompted. The resulting plot can be compared to those in the EPRI study referrenced below. Similarly for the GIC solver, the code can be run and the results of the calculations will be printed to the terminal along with messages from the associated validation tests.
 
 ## ✍️ Authors <a name = "authors"></a>
 
@@ -66,3 +67,19 @@ See also the list of [contributors](https://github.com/scriptedfire/blueeye1_cap
 
   N. A. Tsyganenko and M. I. Sitnov, Modeling the dynamics of the inner magnetosphere during
   strong geomagnetic storms, J. Geophys. Res., v. 110 (A3), A03208, doi: 10.1029/2004JA010798, 2005
+  
+  Transformer Thermal Impact Assessments for DC Withstand Capability: 
+  Examining the Impacts of Geomagnetically Induced Current (GIC) on Transformer Thermal Performance. 
+  EPRI, Palo Alto, CA: 2019. 3002017708.
+  
+  Magnetohydrodynamic Electromagnetic Pulse Assessment of the Continental U.S. Electric Grid: 
+  Geomagnetically Induced Current and Transformer Thermal Analysis. 
+  EPRI, Palo Alto, CA: 2017. 3002009001.
+  
+  Horton, Randy & Boteler, David & Overbye, Thomas & Pirjola, Risto & Dugan, Roger. (2012). 
+  A Test Case for the Calculation of Geomagnetically Induced Currents. 
+  Power Delivery, IEEE Transactions on. 27. 2368-2373. 10.1109/TPWRD.2012.2206407. 
+  
+  Boteler, David & Pirjola, Risto. (2016). 
+  Modelling Geomagnetically Induced Currents. 
+  Space Weather. 15. 10.1002/2016SW001499. 
