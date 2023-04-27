@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import N,S,E,W
 from tkinter import ttk
 from tkinter import filedialog as fdialog
+from tkinter import messagebox
 from math import sin, cos, radians
 from core import Core
 
@@ -258,7 +259,6 @@ class App(tk.Tk):
         self.bus_btn_sets = []
         self.sub_view_active = False
 
-    # FIXME: bring in more data
     def create_bus_view(self, sub_nums, bus_num):
         branches = self.get_branches_for_bus(bus_num)
         
@@ -269,31 +269,57 @@ class App(tk.Tk):
             else:
                 to_buses.append(branch[1])
 
+        # create bus label
+        self.bus_label = ttk.Label(self.body, text="Bus " + str(bus_num) + ":")
+        self.bus_label.grid(column=0, row=1, sticky=(N,W), padx=4, pady=8)
+
+        # create bus frame
         self.bus_frame = ttk.Frame(self.body)
-        self.bus_frame.grid(column=0, row=1, sticky=(N,W), columnspan=15)
+        self.bus_frame.grid(column=0, row=2, sticky=(N,W), columnspan=15)
 
-        self.bus_label = ttk.Label(self.bus_frame, text="Bus " + str(bus_num) + ":")
-        self.bus_label.grid(column=0, row=1, sticky=(N,W), pady=8)
-
-        self.branch_labels = []
-        current_row = 2
+        self.branch_display_vals = {}
+        current_column = 0
         for i in range(len(branches)):
-            branch_label = ttk.Label(self.bus_frame, text="To " + str(to_buses[i]) + " : " + str(self.branch_data[branches[i]]))
-            branch_label.grid(column=0, row=current_row, sticky=(N,W))
-            self.branch_labels.append(branch_label)
+            current_row = 2
+
+            # create branch label
+            branch_label = ttk.Label(self.bus_frame, text="To " + str(to_buses[i]) + ":")
+            branch_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
+            self.branch_display_vals[branches[i]] = {"branch_label":branch_label}
             current_row += 1
 
-        # back button
-        self.back_to_sub_btn = ttk.Button(self.bus_frame, text="Back", command=self.back_to_sub(sub_nums))
-        self.back_to_sub_btn.grid(column=0, row=current_row, sticky=(N,W), pady=16)
+            # create GIC label
+            GIC_label = ttk.Label(self.bus_frame, text="GIC: XXX.X")
+            GIC_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
+            self.branch_display_vals[branches[i]]["GIC_label"] = GIC_label
+            current_row += 1
+
+            # create VLEVEL and TTC labels
+            if(self.branch_data[branches[i]]["has_trans"]):
+                VLEVEL_label = ttk.Label(self.bus_frame, text="VLEVEL: XXX.X")
+                VLEVEL_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
+                self.branch_display_vals[branches[i]]["VLEVEL_label"] = VLEVEL_label
+                current_row += 1
+
+                TTC_label = ttk.Label(self.bus_frame, text="TTC: XXX.X")
+                TTC_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
+                self.branch_display_vals[branches[i]]["TTC_label"] = TTC_label
+
+            current_column += 1
+
+        # create back button
+        self.back_to_sub_btn = ttk.Button(self.body, text="Back", command=self.back_to_sub(sub_nums))
+        self.back_to_sub_btn.grid(column=0, row=6, sticky=(N,W), pady=16, padx=4)
 
         # declare view as active
         self.bus_view_active = True
 
     def destroy_bus_view(self):
+        self.bus_label.destroy()
         self.bus_frame.destroy()
         self.branch_labels = []
         self.bus_view_active = False
+        self.back_to_sub_btn.destroy()
 
     ###########################
     # State Loading Functions #
@@ -359,8 +385,8 @@ class App(tk.Tk):
                 # split file data into sections, sections into lines, and lines into values
                 fdata = list(map(self.load_file_process_sections, grid_file.read().split("\n\n")))
 
-                # FIXME: display error to user if file has invalid number of sections, clear any error if a valid file is then given
                 if(len(fdata) != 33):
+                    messagebox.showerror("file load error", "Failed to load file: may have been imported incorrectly")
                     return
                 
                 # clear any active views other than grid
@@ -655,6 +681,8 @@ class App(tk.Tk):
     ####################
 
     def get_branches_btwn_subs(self):
+        """Finds all the branches in the grid that run between subs and returns
+        the subs and buses connected in each branch"""
         branches_btwn_subs = []
         for ids in self.branch_data:
             # get data from state
