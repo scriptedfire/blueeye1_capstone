@@ -53,12 +53,19 @@ class App(tk.Tk):
     # state from user input: keeps track of if the sub view exists or not
     sub_view_active = False
 
-    # state from user input: keeps track of if the bus view exists or not
+    # state from user input: keeps track of if the bus view exists or not and what bus it's on
     bus_view_active = False
+    bus_view_bus_num = None
 
     # state from user input: locations of the horizontal and vertical grid sliders for exiting/reentering grid view
     grid_canvas_saved_x = None
     grid_canvas_saved_y = None
+
+    # state from user input: start of simulation
+    start_time = None
+
+    # state from running simulation: current time in simulation
+    sim_time = None
 
     def __init__(self):
         super().__init__()
@@ -90,7 +97,7 @@ class App(tk.Tk):
         self.dday_input = ttk.Combobox(self.body, textvariable=self.dday_val, width=3, state="readonly")
         self.slash2_label = ttk.Label(self.body, text="/")
         self.dyear_val = tk.StringVar()
-        self.dyear_input = ttk.Entry(self.body, textvariable=self.dyear_val, width=5)
+        self.dyear_input = ttk.Combobox(self.body, textvariable=self.dyear_val, width=5, state="readonly")
 
         # enter time
         self.time_in_label = ttk.Label(self.body, text="Solar Storm Time:")
@@ -104,6 +111,9 @@ class App(tk.Tk):
         # simulation time
         self.time_label = ttk.Label(self.body, text="Time In Simulation: XX:XX")
 
+        # button configuration
+        self.play_btn.state(["disabled"])
+
         # enter zoom
         self.zoom_label = tk.Label(self.body, text="Zoom: ")
         self.zoom_val = tk.StringVar()
@@ -112,11 +122,12 @@ class App(tk.Tk):
         # date input configuration
         self.dmonth_input.set("01")
         self.dmonth_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1,13))))
+        self.dmonth_input.bind('<<ComboboxSelected>>', self.set_days_for_month)
         self.dday_input.set("01")
         self.dday_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1,32))))
-        self.dyear_input.insert(0,"YYYY")
-        self.dyear_input.bind("<FocusIn>", self.clear_dyear)
-        self.dyear_input.bind("<KeyRelease>", self.validate_dyear)
+        self.dyear_input.set("2023")
+        self.dyear_input["values"] = list(map(lambda val : str(val), list(range(1970, 2038))))
+        self.dyear_input.bind('<<ComboboxSelected>>', self.check_for_leap_year)
 
         # time input configuration
         self.hour_input.set("01")
@@ -475,9 +486,8 @@ class App(tk.Tk):
                     # recurse
                     branches_btwn_subs = still_unlocated
 
-                # FIXME: log to file rather than printing
-                print("Shift count:",shift_count)
-                print("Ultrashift count:",ultrashift_count)
+                self.core.log_to_file("GUI", "Shift count: " + str(shift_count))
+                self.core.log_to_file("GUI", "Ultrashift count: " + str(ultrashift_count))
 
                 # check if a substation failed to be located
                 lost_count = 0
@@ -485,9 +495,12 @@ class App(tk.Tk):
                     if(self.substation_data[item]["lat"] == None):
                         lost_count += 1
 
-                print("Lost count:", lost_count)
+                self.core.log_to_file("GUI", "Lost count: " + str(lost_count))
 
                 self.core.load_grid_data(grid_file.name[:-4], self.substation_data, self.bus_data, self.branch_data)
+
+                # enable simulating
+                self.play_btn.state(["!disabled"])
 
                 # reset grid size back to user-defined value before displaying
                 self.grid_canvas_size = int(self.zoom_val.get()[:-1]) * 0.01 * 10000
@@ -533,20 +546,42 @@ class App(tk.Tk):
     def test_fn(self, *args):
         print("Button pressed.")
 
-    def validate_dyear(self, *args):
-        val = self.dyear_val.get()
-        if len(val) > 0:
-            lastkey = val[len(val) - 1]
-        else:
-            return
+    def set_days_for_month(self, *args):
+        val = int(self.dmonth_val.get())
+        days_in_month = 0
+        if(val in [1, 3, 5, 7, 8, 10, 12]):
+            days_in_month = 31
+        elif(val in [4, 6, 9, 11]):
+            days_in_month = 30
+        elif(val == 2):
+            # leap year condition
+            year_val = int(self.dyear_input.get())
+            if((((year_val % 4) == 0) and not ((year_val % 100) == 0)) or ((year_val % 400) == 0)):
+                days_in_month = 29
+            else:
+                days_in_month = 28
 
-        if not lastkey.isdigit():
-            self.dyear_input.delete(len(val) - 1, "end")
-        elif len(val) > 4:
-            self.dyear_input.delete(4, "end")
+        self.dday_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1, days_in_month + 1))))
 
-    def clear_dyear(self, *args):
-        self.dyear_input.delete(0, "end")
+        # if on an invalid day, set back to a valid one
+        if(int(self.dday_val.get()) > days_in_month):
+            self.dday_input.set(str(days_in_month).rjust(2, "0"))
+
+    def check_for_leap_year(self, *args):
+        val = int(self.dyear_val.get())
+
+        # leap year condition
+        month_val = int(self.dmonth_val.get())
+        if(month_val == 2):
+            days_in_month = 28
+            if((((val % 4) == 0) and not ((val % 100) == 0)) or ((val % 400) == 0)):
+                days_in_month = 29
+            
+            self.dday_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1, days_in_month + 1))))
+
+            # if on an invalid day, set back to a valid one
+            if(int(self.dday_val.get()) > days_in_month):
+                self.dday_input.set(str(days_in_month).rjust(2, "0"))
 
     def back_to_grid(self, *args):
         self.destroy_sub_view()
@@ -566,6 +601,10 @@ class App(tk.Tk):
             self.create_sub_view(sub_nums)
 
         return event_handler
+    
+    # FIXME: Simulation Functions
+    # Lock all time and date inputs when simulation is running
+    # Sim update loop uses state to know what values to update
 
     ########################
     # Conversion Functions #
@@ -626,7 +665,7 @@ class App(tk.Tk):
 
             # filter branches within substations
             if(from_sub_num != to_sub_num):
-                branches_btwn_subs.append([from_sub_num, to_sub_num])
+                branches_btwn_subs.append([from_sub_num, to_sub_num, ids[0], ids[1]])
 
         return branches_btwn_subs
     
@@ -695,9 +734,8 @@ class App(tk.Tk):
             return self.grid_canvas.create_line(from_x_val, from_y_val + (self.sq_size / 2), to_x_val + self.sq_size, to_y_val + (self.sq_size / 2), fill="red", width=2)
         
         else:
-            # FIXME: log to file rather than printing
-            print("strange values in place wire:")
-            print(from_x_val, to_x_val, from_y_val, to_y_val)
+            self.core.log_to_file("GUI", "Strange values in place wire: " + str(from_x_val) + " " + str(to_x_val) + " "
+                                  + str(from_y_val) + " " +  str(to_y_val))
         
     def generate_axial_labels(self):
         # find how many long degrees in display area
@@ -766,7 +804,10 @@ class App(tk.Tk):
             to_sub_long = to_sub["long"]
 
             # draw
-            self.place_wire(from_sub_long, from_sub_lat, to_sub_long, to_sub_lat)
+            line_id = self.place_wire(from_sub_long, from_sub_lat, to_sub_long, to_sub_lat)
+
+            # store lines in state so they can be colored during simulation
+            self.branch_data[(ids[2], ids[3])]["line_id"] = line_id
 
         # clear grid mapping state
         self.substation_pixels = {}
@@ -807,12 +848,11 @@ class App(tk.Tk):
             if(len(self.substation_pixels[i]) > 1):
                 overlaps_count += 1
 
-        # print diagnostic information to console
-        # FIXME: log to file rather than printing
-        print("Substations with overlap:", len(self.substations_overlapped_by_sub))
-        print("Pixels with overlap:", overlaps_count)
+        # log diagnostic information
+        self.core.log_to_file("GUI", "Substations with overlap: " + str(len(self.substations_overlapped_by_sub)))
+        self.core.log_to_file("GUI", "Pixels with overlap: " + str(overlaps_count))
         if(len(overlaps_list) > 0):
-            print("Worst overlap:", max(overlaps_list))
+            self.core.log_to_file("GUI", "Worst overlap: " + str(max(overlaps_list)))
 
         # draw grid labels
         self.generate_axial_labels()
