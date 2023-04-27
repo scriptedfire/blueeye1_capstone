@@ -1,0 +1,3 @@
+Line,From Bus,To Bus,Voltage (kV-LL),Length (km),Resistance (ohms/phase),Series Capacitor
+1,2,3,345,121.06,3.525,0
+2,4,5,500,160.47,4.665,0

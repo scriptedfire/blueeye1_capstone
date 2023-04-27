@@ -1,0 +1,4 @@
+Name,Type,Resistance W1,Bus No,Resistance W2,Bus No,Blocking Device
+T1,GSU,0.5,2,N/A,1,1
+T2,Auto,0.2,4,0.2,3,0
+T3,GSU,0.5,5,N/A,6,0
