@@ -3,6 +3,7 @@ from tkinter import N,S,E,W
 from tkinter import ttk
 from tkinter import filedialog as fdialog
 from math import sin, cos, radians
+from core import Core
 
 class App(tk.Tk):
     # constant: display size of substation squares
@@ -67,6 +68,7 @@ class App(tk.Tk):
         self.rowconfigure(1, weight=1)
 
         self.create_body_frame()
+        self.core = Core()
 
     #####################################
     # UI Creation/Destruction Functions #
@@ -337,7 +339,7 @@ class App(tk.Tk):
         return (shift_count, ultrashift_count)
 
     def load_file(self, *args):
-        "Loads grid file in RAW format chosen by the user into state"
+        "Loads grid file in AUX format chosen by the user into state"
         filetypes = (("AUX files", "*.AUX"),)
 
         # open file
@@ -416,7 +418,7 @@ class App(tk.Tk):
                 self.branch_data = {}
                 for item in branch_fdata:
                     ids = item[0].split()
-                    self.branch_data[(int(ids[0]), int(ids[1]))] = {"hasTrans" : False}
+                    self.branch_data[(int(ids[0]), int(ids[1]))] = {"has_trans" : False}
 
                 # get transformer data
                 trans_fdata = fdata[24][9:-1]
@@ -424,7 +426,7 @@ class App(tk.Tk):
                 # load transformers into state
                 for item in trans_fdata:
                     ids = item[0].split()
-                    self.branch_data[(int(ids[0]), int(ids[1]))]["hasTrans"] = True
+                    self.branch_data[(int(ids[0]), int(ids[1]))]["has_trans"] = True
 
                 # get branches between substations
                 branches_btwn_subs = self.get_branches_btwn_subs()
@@ -485,7 +487,7 @@ class App(tk.Tk):
 
                 print("Lost count:", lost_count)
 
-                # FIXME: load data into state
+                self.core.load_grid_data(grid_file.name[:-4], self.substation_data, self.bus_data, self.branch_data)
 
                 # reset grid size back to user-defined value before displaying
                 self.grid_canvas_size = int(self.zoom_val.get()[:-1]) * 0.01 * 10000
