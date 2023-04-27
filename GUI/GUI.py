@@ -734,8 +734,13 @@ class App(tk.Tk):
             minute = int(self.minute_input.get())
             ampm = self.ampm_input.get()
 
+            # convert from 12hr to 24hr
             if(ampm == "PM"):
-                hour += 12
+                if(hour != 12):
+                    hour += 12
+
+            if(ampm == "AM" and hour == 12):
+                hour = 0
 
             # create start datetime
             set_start_time = datetime(year, month, day, hour, minute)
