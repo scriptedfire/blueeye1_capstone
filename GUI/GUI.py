@@ -146,8 +146,8 @@ class App(tk.Tk):
         # time input configuration
         self.hour_input.set("01")
         self.hour_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1,13))))
-        self.minute_input.set("01")
-        self.minute_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1,60))))
+        self.minute_input.set("00")
+        self.minute_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(0,60))))
         self.ampm_input.set("AM")
         self.ampm_input["values"] = ["AM", "PM"]
 
@@ -655,7 +655,9 @@ class App(tk.Tk):
         return "#%02x%02x%02x" % rgb  
 
     def simulation_loop(self):
-        "The gremlin that runs around and bangs on things."
+        """Loop that runs in a thread and carries out simulation playback.
+        The simulation runs at a scale of roughly 1 second per minute and loops after
+        it reaches an hour from start time."""
         local_core = Core()
         local_core.log_to_file("GUI", "Local Core Online")
         while(self.sim_running):
@@ -710,7 +712,7 @@ class App(tk.Tk):
             # update sim time
             sleep(1)
             self.sim_time += timedelta(minutes=1)
-            if(self.sim_time == (self.start_time + timedelta(minutes=59))):
+            if(self.sim_time == (self.start_time + timedelta(minutes=60))):
                 self.sim_time = self.start_time
 
     def play_or_pause_sim(self, *args):
