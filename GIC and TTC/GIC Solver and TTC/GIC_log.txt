@@ -1,0 +1,36 @@
+Locating transmission line end points for 20 bus case
+Locating transmission line end points for 6 bus case
+Calculating line lengths for 20 bus case
+Calculating line lengths for 6 bus case
+Calculating induced voltages for 6 bus case
+Calculating induced voltages for 20 bus case
+Calculating Norton Equivalent Current for 6 bus case
+Calculating Norton Equivalent Current for 20 bus case, Northward field
+Locating DC model nodes for 6 bus case
+Locating DC model nodes for 20 bus case
+Generating current injection vector for 6 bus case
+Generating conductance matrix
+Gathering circuit relationship details for current calculations
+Generating nodal voltage matrix
+Calculating transformer currents
+Calculating transmission line GIC
+Calculating effective GIC for autotransformers
+Exporting data
+Locating transmission line end points for 20 bus case
+Locating transmission line end points for 6 bus case
+Calculating line lengths for 20 bus case
+Calculating line lengths for 6 bus case
+Calculating induced voltages for 6 bus case
+Calculating induced voltages for 20 bus case
+Calculating Norton Equivalent Current for 6 bus case
+Calculating Norton Equivalent Current for 20 bus case, Northward field
+Locating DC model nodes for 6 bus case
+Locating DC model nodes for 20 bus case
+Generating current injection vector for 6 bus case
+Generating conductance matrix
+Gathering circuit relationship details for current calculations
+Generating nodal voltage matrix
+Calculating transformer currents
+Calculating transmission line GIC
+Calculating effective GIC for autotransformers
+Exporting data

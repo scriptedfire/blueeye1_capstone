@@ -627,6 +627,8 @@ six_bus_transformer_array = csv_to_array("/Users/madelineburrows/Desktop/ECEN 40
 # using this array to illustrate that code can account for blocking device
 six_bus_trans_array_w_bd = csv_to_array("/Users/madelineburrows/Desktop/ECEN 403/6 Bus Transformer Data w_ GIC BD.csv")
 
+# array to hold 20 bus transformer data
+transformer_array = csv_to_array('/Users/madelineburrows/Desktop/ECEN 403/Transformer Data .csv')
 
 line_data = grab_line_cords(line_array, substation_array)
 log_message('Locating transmission line end points for 20 bus case')
