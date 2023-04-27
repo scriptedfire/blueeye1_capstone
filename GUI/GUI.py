@@ -11,6 +11,9 @@ class App(tk.Tk):
     # state from user input: canvas size for scaling lat/long
     grid_canvas_size = 1000
 
+    # constant: angle between sub branches placed from a given sub
+    placement_angle = 15
+
     # constant: toss distance percent for approximating sub locations that don't have coords
     toss_percent = 0.02
 
@@ -43,6 +46,19 @@ class App(tk.Tk):
     # used for O(1) lookup of substations under a given substation
     substations_overlapped_by_sub = {}
 
+    # state from user input: keeps track of if the grid canvas exists or not
+    grid_canvas_active = False
+
+    # state from user input: keeps track of if the sub view exists or not
+    sub_view_active = False
+
+    # state from user input: keeps track of if the bus view exists or not
+    bus_view_active = False
+
+    # state from user input: locations of the horizontal and vertical grid sliders for exiting/reentering grid view
+    grid_canvas_saved_x = None
+    grid_canvas_saved_y = None
+
     def __init__(self):
         super().__init__()
         
@@ -52,15 +68,12 @@ class App(tk.Tk):
 
         self.create_body_frame()
 
+    #####################################
+    # UI Creation/Destruction Functions #
+    #####################################
+
     def create_body_frame(self):
         self.body = ttk.Frame(self, padding="3 3 12 12")
-
-        # canvas initialization
-        self.h_scroll = ttk.Scrollbar(self, orient=tk.HORIZONTAL)
-        self.v_scroll = ttk.Scrollbar(self, orient=tk.VERTICAL)
-        self.grid_canvas = tk.Canvas(self, scrollregion=(0, 0, self.grid_canvas_size, self.grid_canvas_size), yscrollcommand=self.v_scroll.set, xscrollcommand=self.h_scroll.set, background="white")
-        self.h_scroll['command'] = self.grid_canvas.xview
-        self.v_scroll['command'] = self.grid_canvas.yview
 
         # buttons
         self.load_btn = ttk.Button(self.body, text="Load Grid File", command=self.load_file)
@@ -120,10 +133,6 @@ class App(tk.Tk):
         # widget placement
         self.body.grid(column=0, row=0, sticky=(N,W,E,S))
 
-        self.h_scroll.grid(column=0, row=2, columnspan=15, sticky=(W,S,E))
-        self.v_scroll.grid(column=15,row=1, rowspan=2, sticky=(N,S,E))
-        self.grid_canvas.grid(column=0, row=1, columnspan=5, sticky=(N,W,E,S))
-
         self.load_btn.grid(column=0, row=0, sticky=(N,W))
         self.play_btn.grid(column=1, row=0, sticky=(N,W))
         
@@ -143,6 +152,136 @@ class App(tk.Tk):
         self.zoom_label.grid(column=13, row=0, sticky=(W,E))
         self.zoom_input.grid(column=14, row=0, sticky=(W,E))
 
+    def create_grid_canvas(self):
+        # canvas initialization
+        self.h_scroll = ttk.Scrollbar(self, orient=tk.HORIZONTAL)
+        self.v_scroll = ttk.Scrollbar(self, orient=tk.VERTICAL)
+        self.grid_canvas = tk.Canvas(self, scrollregion=(0, 0, self.grid_canvas_size, self.grid_canvas_size), yscrollcommand=self.v_scroll.set, xscrollcommand=self.h_scroll.set, background="white")
+        self.h_scroll['command'] = self.grid_canvas.xview
+        self.v_scroll['command'] = self.grid_canvas.yview
+
+        # canvas placement
+        self.h_scroll.grid(column=0, row=2, columnspan=15, sticky=(W,S,E))
+        self.v_scroll.grid(column=15,row=1, rowspan=2, sticky=(N,S,E))
+        self.grid_canvas.grid(column=0, row=1, columnspan=5, sticky=(N,W,E,S))
+
+        # load slider positions if positions have been saved
+        if(self.grid_canvas_saved_x != None and self.grid_canvas_saved_y != None):
+            self.grid_canvas.xview_moveto(self.grid_canvas_saved_x)
+            self.grid_canvas.yview_moveto(self.grid_canvas_saved_y)
+
+        # enable zooming
+        self.zoom_input.state(["!disabled"])
+
+        # declare canvas as active
+        self.grid_canvas_active = True
+
+    def destroy_grid_canvas(self, save_slider_positions=True):
+        # save slider positions if set to
+        if(save_slider_positions):
+            self.grid_canvas_saved_x = self.grid_canvas.xview()[0]
+            self.grid_canvas_saved_y = self.grid_canvas.yview()[0]
+        else:
+            self.grid_canvas_saved_x = None
+            self.grid_canvas_saved_y = None
+
+        # canvas destruction
+        self.h_scroll.destroy()
+        self.v_scroll.destroy()
+        self.grid_canvas.destroy()
+
+        # disable zooming
+        self.zoom_input.state(["disabled"])
+
+        # declare canvas as inactive
+        self.grid_canvas_active = False
+
+    def create_sub_view(self, sub_nums):
+        # create internal sub frame
+        self.sub_frame = ttk.Frame(self.body)
+        self.sub_frame.grid(column=0, row=1, sticky=(N,W), columnspan=15)
+
+        # dynamically build bus buttons
+        current_row = 1
+        self.sub_labels = []
+        self.bus_btn_frames = []
+        self.bus_btn_sets = []
+        for sub_num in sub_nums:
+            # create label for substations
+            sub_label = ttk.Label(self.sub_frame, text="Substation " + str(sub_num) + ":")
+            sub_label.grid(column=0, row=current_row, sticky=(N,W), pady=8)
+            self.sub_labels.append(sub_label)
+            current_row += 1
+
+            # create frame to contain bus buttons
+            bus_btn_frame = ttk.Frame(self.sub_frame)
+            bus_btn_frame.grid(column=0, row=current_row, sticky=(N,W), columnspan=15)
+            self.bus_btn_frames.append(bus_btn_frame)
+
+            # create bus buttons
+            current_column = 0
+            buses = self.get_buses_for_sub(sub_num)
+            bus_btns = []
+            for bus_num in buses:
+                bus_btn = ttk.Button(bus_btn_frame, text="Bus " + str(bus_num), command=self.bus_btn_click(sub_nums, bus_num))
+                bus_btn.grid(column=current_column, row=current_row)
+                bus_btns.append(bus_btn)
+                current_column += 1
+
+            self.bus_btn_sets.append(bus_btns)
+            current_row += 1
+
+        # back button
+        self.back_to_grid_btn = ttk.Button(self.sub_frame, text="Back", command=self.back_to_grid)
+        self.back_to_grid_btn.grid(column=0, row=current_row, sticky=(N,W), pady=16)
+
+        # declare view as active
+        self.sub_view_active = True
+
+    def destroy_sub_view(self):
+        self.sub_frame.destroy()
+        self.sub_labels = []
+        self.bus_btn_frames = []
+        self.bus_btn_sets = []
+        self.sub_view_active = False
+
+    # FIXME: bring in more data
+    def create_bus_view(self, sub_nums, bus_num):
+        branches = self.get_branches_for_bus(bus_num)
+        
+        to_buses = []
+        for branch in branches:
+            if(branch[0] != bus_num):
+                to_buses.append(branch[0])
+            else:
+                to_buses.append(branch[1])
+
+        self.bus_frame = ttk.Frame(self.body)
+        self.bus_frame.grid(column=0, row=1, sticky=(N,W), columnspan=15)
+
+        self.bus_label = ttk.Label(self.bus_frame, text="Bus " + str(bus_num) + ":")
+        self.bus_label.grid(column=0, row=1, sticky=(N,W), pady=8)
+
+        self.branch_labels = []
+        current_row = 2
+        for i in range(len(branches)):
+            branch_label = ttk.Label(self.bus_frame, text="To " + str(to_buses[i]) + " : " + str(self.branch_data[branches[i]]))
+            branch_label.grid(column=0, row=current_row, sticky=(N,W))
+            self.branch_labels.append(branch_label)
+            current_row += 1
+
+        # back button
+        self.back_to_sub_btn = ttk.Button(self.bus_frame, text="Back", command=self.back_to_sub(sub_nums))
+        self.back_to_sub_btn.grid(column=0, row=current_row, sticky=(N,W), pady=16)
+
+        # declare view as active
+        self.bus_view_active = True
+
+    def destroy_bus_view(self):
+        self.bus_frame.destroy()
+        self.branch_labels = []
+        self.bus_view_active = False
+
     ###########################
     # State Loading Functions #
     ###########################
@@ -158,7 +297,9 @@ class App(tk.Tk):
         ultrashift_count = 0
 
         toss_angle = from_sub["next_angle"]
-        toss_magnitude = (self.max_long - self.min_long) * self.toss_percent
+        initial_toss_percent = self.toss_percent
+        toss_magnitude = (self.max_long - self.min_long) * initial_toss_percent
+
         # recursively look for an unoccupied space to locate the sub (at 100% zoom)
         iterations = 0
         while(True):
@@ -178,14 +319,17 @@ class App(tk.Tk):
                 # update sub data
                 to_sub["lat"] = to_sub_lat
                 to_sub["long"] = to_sub_long
-                from_sub["next_angle"] = toss_angle + 45
+                from_sub["next_angle"] = toss_angle + self.placement_angle
                 break
             else:
                 shift_count += 1
-                toss_angle += 15
+                toss_angle += self.placement_angle
                 iterations += 1
-                if(iterations > 24):
-                    toss_magnitude = (self.max_long - self.min_long) * (self.toss_percent + 0.01)
+
+                # after all angles have been checked, move further out
+                if(iterations > int(360 / self.placement_angle)):
+                    initial_toss_percent += 0.01
+                    toss_magnitude = (self.max_long - self.min_long) * initial_toss_percent
                     iterations = 0
                     ultrashift_count += 1
         
@@ -199,12 +343,21 @@ class App(tk.Tk):
         # open file
         try:
             with fdialog.askopenfile(filetypes=filetypes) as grid_file:
-                # FIXME: clear cached state after successfully opening file
                 # split file data into sections, sections into lines, and lines into values
                 fdata = list(map(self.load_file_process_sections, grid_file.read().split("\n\n")))
 
-                # perform mapping calculations at %20 graph size
-                # (smallest before substation locating algorithm breaks down)
+                # FIXME: display error to user if file has invalid number of sections, clear any error if a valid file is then given
+                if(len(fdata) != 33):
+                    return
+                
+                # clear any active views other than grid
+                if(self.sub_view_active):
+                    self.destroy_sub_view()
+                if(self.bus_view_active):
+                    self.destroy_bus_view()
+
+                # perform mapping calculations at 20% graph size
+                # at 10% is possible but overkill for getting a legible graph at 100%
                 self.grid_canvas_size = 2000
 
                 # get substation data
@@ -214,7 +367,9 @@ class App(tk.Tk):
                 located_substations_lat = []
                 located_substations_long = []
                 located_substations_ids = []
-                next_angle = 15
+                next_angle = self.placement_angle
+                self.substation_data = {}
+                self.substation_pixels = {}
                 for item in substation_fdata:
                     id = int(item[0])
                     coords = item[4].split(' ')
@@ -222,7 +377,7 @@ class App(tk.Tk):
                     # substation w/o coordinates
                     if len(coords) == 2:
                         self.substation_data[id] = {"lat": None, "long": None, "next_angle": next_angle}
-                        next_angle += 15
+                        next_angle += self.placement_angle
                         next_angle %= 360
                         continue
 
@@ -235,7 +390,7 @@ class App(tk.Tk):
 
                     # give substations different angles for connecting substations w/o coordinates
                     self.substation_data[id] = {"lat": lat, "long": long, "next_angle": next_angle}
-                    next_angle += 15
+                    next_angle += self.placement_angle
                     next_angle %= 360
 
                 # load limits into state
@@ -248,6 +403,7 @@ class App(tk.Tk):
                 bus_fdata = fdata[19][11:-1]
 
                 # load buses into state
+                self.bus_data = {}
                 for item in bus_fdata:
                     id = int(item[0])
                     sub_num = int((item[2].split())[8])
@@ -257,9 +413,18 @@ class App(tk.Tk):
                 branch_fdata = fdata[23][12:-1]
 
                 # load branches into state
+                self.branch_data = {}
                 for item in branch_fdata:
                     ids = item[0].split()
-                    self.branch_data[(int(ids[0]), int(ids[1]))] = {}
+                    self.branch_data[(int(ids[0]), int(ids[1]))] = {"hasTrans" : False}
+
+                # get transformer data
+                trans_fdata = fdata[24][9:-1]
+
+                # load transformers into state
+                for item in trans_fdata:
+                    ids = item[0].split()
+                    self.branch_data[(int(ids[0]), int(ids[1]))]["hasTrans"] = True
 
                 # get branches between substations
                 branches_btwn_subs = self.get_branches_btwn_subs()
@@ -281,21 +446,20 @@ class App(tk.Tk):
                         from_sub = self.substation_data[ids[0]]
                         to_sub = self.substation_data[ids[1]]
 
-                        # get coords
+                        # get latitudes to determine if each sub has a location defined or not
                         from_sub_lat = from_sub["lat"]
-                        from_sub_long = from_sub["long"]
                         to_sub_lat = to_sub["lat"]
-                        to_sub_long = to_sub["long"]
 
-                        # completely ignore branches where both subs have coords
+                        # completely ignore branches where both subs have locations
                         if(from_sub_lat != None and to_sub_lat):
                             continue
 
-                        # if both subs have no coords, skip for now and pick up in later iteration
+                        # if both subs have no location, skip for now and pick up in later iteration
                         if(from_sub_lat == None and to_sub_lat == None):
                             still_unlocated.append(ids)
                             continue
 
+                        # if only one sub has a location, use its location to generate a location for the other
                         else:
                             if(from_sub_lat != None and to_sub_lat == None):
                                 diagnostics = self.generate_sub_location(from_sub, to_sub, ids[1])
@@ -327,14 +491,39 @@ class App(tk.Tk):
                 self.grid_canvas_size = int(self.zoom_val.get()[:-1]) * 0.01 * 10000
 
                 self.redraw_grid()
-
-                # enable zooming
-                self.zoom_input.state(["!disabled"])
+                self.title("Space Weather Analysis Tool: " + grid_file.name[:-4])
         
         # ignore cancel hit on filedialog
         except AttributeError:
             None
 
+    ###############################
+    # Grid Canvas Input Functions #
+    ###############################
+
+    def execute_zoom(self, *args):
+        # update grid_canvas_size
+        self.grid_canvas_size = int(self.zoom_val.get()[:-1]) * 0.01 * 10000
+
+        # carry out change
+        if(self.grid_canvas_active):
+            self.redraw_grid()
+
+    def grid_canvas_sub_click(self, sub_num):
+        def event_handler(event):
+            # get any subs under clicked sub and pass them all to sub view
+            subs_in_click = [sub_num]
+            try:
+                for sub in self.substations_overlapped_by_sub[sub_num]:
+                    subs_in_click.append(sub)
+            except KeyError:
+                None
+
+            self.destroy_grid_canvas()
+            self.create_sub_view(subs_in_click)
+
+        return event_handler
+    
     #########################
     # Other Input Functions #
     #########################
@@ -357,26 +546,28 @@ class App(tk.Tk):
     def clear_dyear(self, *args):
         self.dyear_input.delete(0, "end")
 
-    def execute_zoom(self, *args):
-        # update grid_canvas_size
-        self.grid_canvas_size = int(self.zoom_val.get()[:-1]) * 0.01 * 10000
-
+    def back_to_grid(self, *args):
+        self.destroy_sub_view()
+        self.create_grid_canvas()
         self.redraw_grid()
 
-    def grid_canvas_click(self, sub_num):
-        def event_handler(event):
-            print(sub_num, "at", event.x, event.y)
+    def bus_btn_click(self, sub_nums, bus_num):
+        def event_handler(*args):
+            self.destroy_sub_view()
+            self.create_bus_view(sub_nums, bus_num)
 
-            try:
-                print("plus:",self.substations_overlapped_by_sub[sub_num])
-            except KeyError:
-                None
+        return event_handler
+    
+    def back_to_sub(self, sub_nums):
+        def event_handler(*args):
+            self.destroy_bus_view()
+            self.create_sub_view(sub_nums)
 
         return event_handler
 
-    ##########################
-    # Grid Drawing Functions #
-    ##########################
+    ########################
+    # Conversion Functions #
+    ########################
 
     # using https://stackoverflow.com/a/2450158
     # modified to work better for canvas purposes
@@ -417,6 +608,45 @@ class App(tk.Tk):
         lat *= self.grid_canvas_size
 
         return int(lat)
+    
+    ####################
+    # Getter Functions #
+    ####################
+
+    def get_branches_btwn_subs(self):
+        branches_btwn_subs = []
+        for ids in self.branch_data:
+            # get data from state
+            from_bus = self.bus_data[ids[0]]
+            to_bus = self.bus_data[ids[1]]
+            from_sub_num = from_bus["sub_num"]
+            to_sub_num = to_bus["sub_num"]
+
+            # filter branches within substations
+            if(from_sub_num != to_sub_num):
+                branches_btwn_subs.append([from_sub_num, to_sub_num])
+
+        return branches_btwn_subs
+    
+    def get_buses_for_sub(self, sub_num):
+        bus_nums = []
+        for bus_num in self.bus_data:
+            if(self.bus_data[bus_num]["sub_num"] == sub_num):
+                bus_nums.append(bus_num)
+
+        return bus_nums
+    
+    def get_branches_for_bus(self, bus_num):
+        branch_tuples = []
+        for branch_tuple in self.branch_data:
+            if(branch_tuple[0] == bus_num or branch_tuple[1] == bus_num):
+                branch_tuples.append(branch_tuple)
+
+        return branch_tuples
+    
+    ##########################
+    # Grid Drawing Functions #
+    ##########################
 
     def place_sub(self, long, lat, sub_num):
         # convert lat/long to x/y
@@ -428,7 +658,7 @@ class App(tk.Tk):
 
         # place sub rectangle and bind events
         rect_id = self.grid_canvas.create_rectangle((x_val, y_val, x_val + self.sq_size, y_val + self.sq_size), fill="#00ff40", tags=('palette', 'palettered'))
-        self.grid_canvas.tag_bind(rect_id, "<Button-1>", self.grid_canvas_click(sub_num))
+        self.grid_canvas.tag_bind(rect_id, "<Button-1>", self.grid_canvas_sub_click(sub_num))
         
         # place sub text
         self.grid_canvas.create_text(x_val + (self.sq_size / 2), y_val + (self.sq_size * 3), text='S' + str(sub_num), anchor='center', font=("Helvetica", 8), fill='black')
@@ -485,21 +715,6 @@ class App(tk.Tk):
             x_coord = self.long_to_x(self.min_long)
             y_coord = self.lat_to_y(i + self.min_lat)
             self.grid_canvas.create_text(x_coord, y_coord, text=str(int(i + self.min_lat)) + 'N', anchor='center', font=("Helvetica", 12, "bold"), fill='blue')
-
-    def get_branches_btwn_subs(self):
-        branches_btwn_subs = []
-        for ids in self.branch_data:
-            # get data from state
-            from_bus = self.bus_data[ids[0]]
-            to_bus = self.bus_data[ids[1]]
-            from_sub_num = from_bus["sub_num"]
-            to_sub_num = to_bus["sub_num"]
-
-            # filter branches within substations
-            if(from_sub_num != to_sub_num):
-                branches_btwn_subs.append([from_sub_num, to_sub_num])
-
-        return branches_btwn_subs
     
     def check_and_update_substation_pixels(self, sub_num, x_val, y_val, append_overlaps=False):
         overlapped_pixels = 0
@@ -520,14 +735,17 @@ class App(tk.Tk):
 
         return overlapped_pixels
 
-
     def redraw_grid(self):
-        # clear canvas
-        self.grid_canvas.delete("all")
+        # check if grid canvas is active, update if so, create if not
+        if(self.grid_canvas_active):
+            # clear canvas
+            self.grid_canvas.delete("all")
 
-        # resize canvas
-        self.grid_canvas.itemconfigure("inner", width=self.grid_canvas_size, height=self.grid_canvas_size)
-        self.grid_canvas.configure(scrollregion=(0, 0, self.grid_canvas_size, self.grid_canvas_size))
+            # resize canvas
+            self.grid_canvas.itemconfigure("inner", width=self.grid_canvas_size, height=self.grid_canvas_size)
+            self.grid_canvas.configure(scrollregion=(0, 0, self.grid_canvas_size, self.grid_canvas_size))
+        else:
+            self.create_grid_canvas()
 
         # get branches between substations
         branches_btwn_subs = self.get_branches_btwn_subs()
