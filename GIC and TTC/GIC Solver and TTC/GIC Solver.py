@@ -581,6 +581,13 @@ def export_data_csv(data1, data2, file1, file2):
     data2.to_csv(file2, index=False)
 
 
+def log_message(message):
+    # function to create a log file
+    log_file = 'GIC_log.txt'
+    with open(log_file, 'a') as file:
+        file.write(message + '\n')
+
+
 E_field = np.array([[[0, 1]], [[1, 0]]])
 # this is 3d array corresponds to the two inputted E Fields
 # the first E field is 1 V/km in the Northward direction
@@ -622,22 +629,28 @@ six_bus_trans_array_w_bd = csv_to_array("/Users/madelineburrows/Desktop/ECEN 403
 
 
 line_data = grab_line_cords(line_array, substation_array)
+log_message('Locating transmission line end points for 20 bus case')
 # array that holds line data for 20 bus case
 
 six_bus_line_data = grab_line_cords(six_bus_line_array, six_bus_sub_array)
+log_message('Locating transmission line end points for 6 bus case')
 # array that holds line data for 6 bus case
 # format: line number, long_from, lat_from, long_to, lat_to
 
 
 # creating arrays for the 20 bus case and the 6 bus case
 length_array = length_calculator(line_data)
+log_message('Calculating line lengths for 20 bus case')
 six_bus_length = length_calculator(six_bus_line_data)
+log_message('Calculating line lengths for 6 bus case')
 
 
 # creating arrays to hold the calculated induced voltage for the two test cases
 
 six_bus_iv = iv_calculator(six_bus_field, six_bus_length)
+log_message('Calculating induced voltages for 6 bus case')
 twenty_bus_iv = iv_calculator(E_field, length_array)
+log_message('Calculating induced voltages for 20 bus case')
 
 
 # creating dataframes of both input voltage arrays from 20 bus case
@@ -765,11 +778,13 @@ else:
 
 # creating array for the six bus case norton equivalent current
 six_bus_ic = equivalent_current(six_bus_iv[0], six_bus_line_array)
+log_message('Calculating Norton Equivalent Current for 6 bus case')
 # rounding current values to match test case
 six_bus_ic[:, 1] = np.round(six_bus_ic[:, 1], 2)
 
 # creating array to hold norton equivalent currents for twenty bus case, Northward field input
 twenty_bus_N_ic = equivalent_current(twenty_bus_iv[0], line_array)
+log_message('Calculating Norton Equivalent Current for 20 bus case, Northward field')
 twenty_bus_N_ic[:, 1] = np.round(twenty_bus_N_ic[:, 1], 2)
 
 
@@ -821,9 +836,11 @@ for i in range(np.shape(line_array)[0]):
 
 # creating array for six bus case
 six_bus_nodes = find_nodes(six_bus_line_array)
+log_message('Locating DC model nodes for 6 bus case')
 
 # creating array for 20 bus case
 big_case_nodes = find_nodes(line_array)
+log_message('Locating DC model nodes for 20 bus case')
 # all the correct buses are located, but not accounting for neutral
 # must account for neutral at substation 4 and 5 b/c GY-GY and GY-GY-D transformers
 
@@ -838,6 +855,7 @@ expected_sixb_nodes = np.array([[1, 2], [2, 3], [3, 4], [4, 5]])
 
 # creating array for 6 bus case current injection vector
 six_bus_injected = current_injection_vector_generator(six_bus_nodes, six_bus_ic)
+log_message('Generating current injection vector for 6 bus case')
 
 # creating a dataframe from the array above
 injected_df = pd.DataFrame(six_bus_injected, columns=['Current Injection Vector'])
@@ -860,7 +878,8 @@ else:
 six_b_conductance, six_b_relation_array, six_b_line_relation = \
     conductance_matrix_node_relation_generator(six_bus_nodes, six_bus_line_array,
                                                six_bus_transformer_array, six_bus_sub_array, six_bus_ic)
-
+log_message('Generating conductance matrix')
+log_message('Gathering circuit relationship details for current calculations')
 sb_bd_conductance, sb_bd_relation_array, sb_bd_line_relation = \
     conductance_matrix_node_relation_generator(six_bus_nodes, six_bus_line_array,
                                                six_bus_trans_array_w_bd, six_bus_sub_array, six_bus_ic)
@@ -884,6 +903,7 @@ else:
 
 
 six_bus_nodal_voltage = node_voltage_calculator(six_b_conductance, six_bus_injected)
+log_message('Generating nodal voltage matrix')
 sbbd_nv = node_voltage_calculator(sb_bd_conductance, six_bus_injected)
 
 sbnv_df = pd.DataFrame(six_bus_nodal_voltage, columns=['Nodal Voltage'])
@@ -902,6 +922,7 @@ else:
 
 
 six_b_t_currents = transformer_current_calculator(six_b_relation_array, six_bus_nodal_voltage)
+log_message('Calculating transformer currents')
 sbbd_t_currents = transformer_current_calculator(sb_bd_relation_array, sbbd_nv)
 
 
@@ -939,6 +960,7 @@ if sbbd_t_currents[0][2] == 0:
 
 # calculating line currents for six bus case
 six_b_line_currents = line_GIC_calculator(six_b_line_relation, six_bus_nodal_voltage)
+log_message('Calculating transmission line GIC')
 
 # creating data frame of line current data
 sblc_df = pd.DataFrame(six_b_line_currents, columns=['Line Number', 'GIC (A)'])
@@ -964,9 +986,11 @@ else:
     print("Transmission Line GIC Test failed: The arrays are not within 1% of each other.\n")
 
 sb_effective_auto = effective_auto_gic(six_bus_transformer_array, six_b_t_currents)
+log_message('Calculating effective GIC for autotransformers')
 
 sb_ea_df = pd.DataFrame(sb_effective_auto, columns=['Name', 'Type', 'Current (A)'])
 
 total_sb_tc = pd.concat([tca_df, sb_ea_df], ignore_index=True)
 
 export_data_csv(total_sb_tc, sblc_df, 'TransformerCurrents.csv', 'TransmissionLineGIC.csv')
+log_message('Exporting data')

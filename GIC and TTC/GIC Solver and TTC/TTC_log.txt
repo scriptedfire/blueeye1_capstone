@@ -1,0 +1,170 @@
+Calculating heat up for T1 Design 1
+Checking if critical temperature reached for T1 Design 1
+Calculating heat up for T2 Design 1
+Checking if critical temperature reached for T2 Design 1
+Calculating heat up for T3 Design 1
+Checking if critical temperature reached for T3 Design 1
+Calculating heat up for T4 Design 1
+Checking if critical temperature reached for T4 Design 1
+Calculating heat up for T5 Design 1
+Checking if critical temperature reached for T5 Design 1
+Calculating heat up for T6 Design 1
+Checking if critical temperature reached for T6 Design 1
+Calculating heat up for T7 Design 1
+Checking if critical temperature reached for T7 Design 1
+Calculating heat up for T8 Design 1
+Checking if critical temperature reached for T8 Design 1
+Calculating heat up for T9 Design 1
+Checking if critical temperature reached for T9 Design 1
+Calculating heat up for T10 Design 1
+Checking if critical temperature reached for T10 Design 1
+Calculating heat up for T11 Design 1
+Checking if critical temperature reached for T11 Design 1
+Calculating heat up for T12 Design 1
+Checking if critical temperature reached for T12 Design 1
+Calculating heat up for T13 Design 1
+Checking if critical temperature reached for T13 Design 1
+Calculating heat up for T14 Design 1
+Checking if critical temperature reached for T14 Design 1
+Calculating heat up for T15 Design 1
+Checking if critical temperature reached for T15 Design 1
+Calculating heat up for T16 Design 1
+Checking if critical temperature reached for T16 Design 1
+Calculating heat up for T17 Design 1
+Checking if critical temperature reached for T17 Design 1
+Calculating heat up for T18 Design 1
+Checking if critical temperature reached for T18 Design 1
+Calculating heat up for T19 Design 1
+Checking if critical temperature reached for T19 Design 1
+Calculating heat up for T20 Design 1
+Checking if critical temperature reached for T20 Design 1
+Calculating heat up for T21 Design 1
+Checking if critical temperature reached for T21 Design 1
+Calculating heat up for T22 Design 1
+Checking if critical temperature reached for T22 Design 1
+Calculating heat up for T23 Design 1
+Checking if critical temperature reached for T23 Design 1
+Calculating heat up for T24 Design 1
+Checking if critical temperature reached for T24 Design 1
+Calculating heat up for T25 Design 1
+Checking if critical temperature reached for T25 Design 1
+Calculating heat up for T26 Design 1
+Checking if critical temperature reached for T26 Design 1
+Calculating heat up for T27 Design 1
+Checking if critical temperature reached for T27 Design 1
+Calculating heat up for T28 Design 1
+Checking if critical temperature reached for T28 Design 1
+Calculating heat up for T29 Design 1
+Checking if critical temperature reached for T29 Design 1
+Calculating heat up for T30 Design 1
+Checking if critical temperature reached for T30 Design 1
+Calculating heat up for T31 Design 1
+Checking if critical temperature reached for T31 Design 1
+Calculating heat up for T32 Design 1
+Checking if critical temperature reached for T32 Design 1
+Calculating heat up for T33 Design 1
+Checking if critical temperature reached for T33 Design 1
+Calculating heat up for T34 Design 1
+Checking if critical temperature reached for T34 Design 1
+Calculating heat up for T35 Design 1
+Checking if critical temperature reached for T35 Design 1
+Calculating heat up for T36 Design 1
+Checking if critical temperature reached for T36 Design 1
+Calculating heat up for T37 Design 1
+Checking if critical temperature reached for T37 Design 1
+Calculating heat up for T38 Design 1
+Checking if critical temperature reached for T38 Design 1
+Calculating heat up for T39 Design 1
+Checking if critical temperature reached for T39 Design 1
+Calculating heat up for T40 Design 1
+Checking if critical temperature reached for T40 Design 1
+Calculating heat up for T41 Design 1
+Checking if critical temperature reached for T41 Design 1
+Calculating heat up for T42 Design 1
+Checking if critical temperature reached for T42 Design 1
+Calculating heat up for T1 Design 2
+Checking if critical temperature reached for T1 Design 2
+Calculating heat up for T2 Design 2
+Checking if critical temperature reached for T2 Design 2
+Calculating heat up for T3 Design 2
+Checking if critical temperature reached for T3 Design 2
+Calculating heat up for T4 Design 2
+Checking if critical temperature reached for T4 Design 2
+Calculating heat up for T5 Design 2
+Checking if critical temperature reached for T5 Design 2
+Calculating heat up for T6 Design 2
+Checking if critical temperature reached for T6 Design 2
+Calculating heat up for T7 Design 2
+Checking if critical temperature reached for T7 Design 2
+Calculating heat up for T8 Design 2
+Checking if critical temperature reached for T8 Design 2
+Calculating heat up for T9 Design 2
+Checking if critical temperature reached for T9 Design 2
+Calculating heat up for T10 Design 2
+Checking if critical temperature reached for T10 Design 2
+Calculating heat up for T11 Design 2
+Checking if critical temperature reached for T11 Design 2
+Calculating heat up for T12 Design 2
+Checking if critical temperature reached for T12 Design 2
+Calculating heat up for T13 Design 2
+Checking if critical temperature reached for T13 Design 2
+Calculating heat up for T14 Design 2
+Checking if critical temperature reached for T14 Design 2
+Calculating heat up for T15 Design 2
+Checking if critical temperature reached for T15 Design 2
+Calculating heat up for T16 Design 2
+Checking if critical temperature reached for T16 Design 2
+Calculating heat up for T17 Design 2
+Checking if critical temperature reached for T17 Design 2
+Calculating heat up for T18 Design 2
+Checking if critical temperature reached for T18 Design 2
+Calculating heat up for T19 Design 2
+Checking if critical temperature reached for T19 Design 2
+Calculating heat up for T20 Design 2
+Checking if critical temperature reached for T20 Design 2
+Calculating heat up for T21 Design 2
+Checking if critical temperature reached for T21 Design 2
+Calculating heat up for T22 Design 2
+Checking if critical temperature reached for T22 Design 2
+Calculating heat up for T23 Design 2
+Checking if critical temperature reached for T23 Design 2
+Calculating heat up for T24 Design 2
+Checking if critical temperature reached for T24 Design 2
+Calculating heat up for T25 Design 2
+Checking if critical temperature reached for T25 Design 2
+Calculating heat up for T26 Design 2
+Checking if critical temperature reached for T26 Design 2
+Calculating heat up for T27 Design 2
+Checking if critical temperature reached for T27 Design 2
+Calculating heat up for T28 Design 2
+Checking if critical temperature reached for T28 Design 2
+Calculating heat up for T29 Design 2
+Checking if critical temperature reached for T29 Design 2
+Calculating heat up for T30 Design 2
+Checking if critical temperature reached for T30 Design 2
+Calculating heat up for T31 Design 2
+Checking if critical temperature reached for T31 Design 2
+Calculating heat up for T32 Design 2
+Checking if critical temperature reached for T32 Design 2
+Calculating heat up for T33 Design 2
+Checking if critical temperature reached for T33 Design 2
+Calculating heat up for T34 Design 2
+Checking if critical temperature reached for T34 Design 2
+Calculating heat up for T35 Design 2
+Checking if critical temperature reached for T35 Design 2
+Calculating heat up for T36 Design 2
+Checking if critical temperature reached for T36 Design 2
+Calculating heat up for T37 Design 2
+Checking if critical temperature reached for T37 Design 2
+Calculating heat up for T38 Design 2
+Checking if critical temperature reached for T38 Design 2
+Calculating heat up for T39 Design 2
+Checking if critical temperature reached for T39 Design 2
+Calculating heat up for T40 Design 2
+Checking if critical temperature reached for T40 Design 2
+Calculating heat up for T41 Design 2
+Checking if critical temperature reached for T41 Design 2
+Calculating heat up for T42 Design 2
+Checking if critical temperature reached for T42 Design 2
+Exporting heat up data
+Exporting warning data

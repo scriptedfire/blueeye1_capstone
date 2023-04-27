@@ -53,7 +53,11 @@ def csv_to_array(filename):
     # returning the numpy array
     return array
 
-
+def log_message(message):
+    # function to create a log file
+    log_file = 'TTC_log.txt'
+    with open(log_file, 'a') as file:
+        file.write(message + '\n')
 
 # using local csv files to validate subsystem
 # after integration, this data will come from the application core
@@ -170,6 +174,7 @@ for i in range(np.shape(Design1_array)[0]):
     key = 'T{}, design {}'.format(i + 1, 1)
     # creating a key based on the loop index and design number
     Y = hs_temp_rise_calculation(EPRI_Iss, Design1_array[i][1:8].astype(np.float32), tau_1, GIC_array)
+    log_message('Calculating heat up for ' + Design1_array[i][0] + ' Design 1')
     # specifying Tss from function as Design1_array[i][1:8].astype(np.float32)
     # excluding [i][0] because that's the transformer number, not Tss data
     # converting to floats, encountered errors when not designating the type as float32
@@ -178,6 +183,7 @@ for i in range(np.shape(Design1_array)[0]):
     heatup_dict[key] = Y
     # adding array to the dictionary with the key
     # looping through array to see if it hits critical temperature
+    log_message('Checking if critical temperature reached for ' + Design1_array[i][0] + ' Design 1')
     for j in range(np.shape(Y)[0]):
         bad_temp = False
         # creating a flag
@@ -204,7 +210,9 @@ for i in range(np.shape(Design1_array)[0]):
 for i in range(np.shape(Design2_array)[0]):
     key = 'T{}, design {}'.format(i + 1, 2)
     Y = hs_temp_rise_calculation(EPRI_Iss, Design2_array[i][1:8].astype(np.float32), tau_2, GIC_array)
+    log_message('Calculating heat up for ' + Design2_array[i][0] + ' Design 2')
     heatup_dict[key] = Y
+    log_message('Checking if critical temperature reached for ' + Design2_array[i][0] + ' Design 2')
     for j in range(np.shape(Y)[0]):
         bad_temp = False
         if Y[j][1] + Top_oil_array[i][1] >= temperature_limit:
@@ -244,6 +252,7 @@ total_heatup = pd.concat(dfs, axis=1)
 
 # exporting as a csv
 total_heatup.to_csv('total_heatup.csv', index=False)
+log_message('Exporting heat up data')
 
 # creating lists for the keys and values from the warning dictionary
 # using these to have better formatting with the exported csv
@@ -254,6 +263,7 @@ values_list = list(warning_dict.values())
 warning_df = pd.DataFrame({'Transformer': keys_list, 'Warning': values_list})
 # exporting as a csv
 warning_df.to_csv('warnings_generated.csv', index=False)
+log_message('Exporting warning data')
 
 # THE FOLLOWING CODE IS FOR DEMONSTRATION PURPOSES
 # the previous code does the main function of this subsystem by calculating the heat up
