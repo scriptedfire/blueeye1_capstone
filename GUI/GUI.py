@@ -296,7 +296,7 @@ class App(tk.Tk):
             current_row = 2
 
             # create branch label
-            branch_label = ttk.Label(self.bus_frame, text="To " + str(to_buses[i]) + " at Sub " + str(self.bus_data[to_buses[i]]["sub_num"]) + ":")
+            branch_label = ttk.Label(self.bus_frame, text="To Bus " + str(to_buses[i]) + " at Sub " + str(self.bus_data[to_buses[i]]["sub_num"]) + ":")
             branch_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
             self.branch_display_vals[branches[i]] = {"branch_label":branch_label}
             current_row += 1
