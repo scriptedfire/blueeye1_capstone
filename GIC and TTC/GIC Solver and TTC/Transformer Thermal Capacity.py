@@ -2,6 +2,15 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+# author: Kevin Masters
+# email: kmmasters@tamu.edu
+# this script calculates the heat up in the structural elements of transformers (tie bars)
+# this script models the heat up of 42 transformer models
+# the information for these models and the equation used for the calculations are described
+# in the EPRI papers, the pdf versions of which are contained within the same folder as this script
+# after calculating the heat up, this script then generates a warning if the transformer will hit a critical temperature
+# the heat up data and the warnings are outputted as csv files
+
 # critical data:
 # gic flow
 # Transformer type/data

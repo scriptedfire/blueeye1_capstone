@@ -2,6 +2,12 @@ import math
 import numpy as np
 import pandas as pd
 
+# author: Kevin Masters
+# email: kmmasters@tamu.edu
+# This script uses electric field data to calculate the induced voltage on transmission lines
+# The induced voltages is calculated using transmission line and substation data
+# The script then uses this induced voltage data and transformer data to calculate GIC using a DC model
+# The GIC data for the transmission lines and transformers is then outputted as a csv file
 
 # Critical data for gic calculation:
 # 1. Electric field: magnitude, direction
