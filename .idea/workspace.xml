@@ -4,23 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="8ecf9fc9-a430-4060-8126-d6a302a7f78b" name="Changes" comment="Adding notation to scripts">
-      <change afterPath="$PROJECT_DIR$/Electric Field Calculator/.Analytic_Calculation_of_Geoelectric_Fields_Due_to_Geomagnetic_Disturbances_A_Test_Case.pdf.icloud" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Electric Field Calculator/.DataScraperBFieldPredictionEfieldCalculation test.mp4.icloud" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Electric Field Calculator/.ElectricFieldCalculator test.mp4.icloud" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Electric Field Calculator/geopack test bench/.MagneticFieldValidation.mp4.icloud" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/.3002009001 EPRI Transformer Thermal Assessment #1 (1).pdf.icloud" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/TTC_log.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/GUI/Polish_Grid/.Polish_grid.AUX.icloud" afterDir="false" />
+    <list default="true" id="8ecf9fc9-a430-4060-8126-d6a302a7f78b" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Electric Field Calculator/Analytic_Calculation_of_Geoelectric_Fields_Due_to_Geomagnetic_Disturbances_A_Test_Case.pdf" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Electric Field Calculator/DataScraperBFieldPredictionEfieldCalculation test.mp4" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Electric Field Calculator/ElectricFieldCalculator test.mp4" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Electric Field Calculator/geopack test bench/MagneticFieldValidation.mp4" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/3002009001 EPRI Transformer Thermal Assessment #1 (1).pdf" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver.py" beforeDir="false" afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/Transformer Thermal Capacity.py" beforeDir="false" afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/Transformer Thermal Capacity.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/GUI/Polish_Grid/Polish_grid.AUX" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -117,12 +102,27 @@
       <option name="project" value="LOCAL" />
       <updated>1682572470790</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="Log files added">
+      <created>1682577331405</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1682577331405</updated>
+    </task>
+    <task id="LOCAL-00003" summary="Log files added">
+      <created>1682577985098</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1682577985098</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
     <option name="ADD_EXTERNAL_FILES_SILENTLY" value="true" />
     <MESSAGE value="Adding notation to scripts" />
-    <option name="LAST_COMMIT_MESSAGE" value="Adding notation to scripts" />
+    <MESSAGE value="Log files added" />
+    <option name="LAST_COMMIT_MESSAGE" value="Log files added" />
   </component>
 </project>
