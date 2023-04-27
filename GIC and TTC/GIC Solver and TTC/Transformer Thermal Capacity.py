@@ -62,7 +62,7 @@ def log_message(message):
 # using local csv files to validate subsystem
 # after integration, this data will come from the application core
 
-GIC_array = csv_to_array("/Users/madelineburrows/Desktop/ECEN 403/TTC GIC Data.csv")
+GIC_array = csv_to_array("TTC GIC Data.csv")
 # this array holds the data on the current flowing into the transformer
 # format of array: time, current (A)
 # this array follows what was inputted for the EPRI study: 10, 20, 40, 50, 100, 200 (A) each for 60 min
@@ -76,18 +76,18 @@ GIC_array = csv_to_array("/Users/madelineburrows/Desktop/ECEN 403/TTC GIC Data.c
 # for total heat assume ambient temp is 40 degrees Celsius
 # Assume top oil temp is constant
 
-Design1_array = csv_to_array("/Users/madelineburrows/Desktop/ECEN 403/EPRI Tie Bar Design 1 SS Values.csv")
+Design1_array = csv_to_array("EPRI Tie Bar Design 1 SS Values.csv")
 # this array holds the steady state temperatures, in Kelvin, for the design 1 tie bar transformers
 # the steady state temperatures (Tss) correspond to the above stated dc current levels
 # the heat up to steady state temperature is non-linear
 # format of array: transformer name, 0A Tss (always 0), 10A Tss, 20A Tss, 40A Tss, 50A Tss, 100A Tss, 200A Tss
 
-Design2_array = csv_to_array("/Users/madelineburrows/Desktop/ECEN 403/EPRI Tie Bar Design 2 SS Values.csv")
+Design2_array = csv_to_array("EPRI Tie Bar Design 2 SS Values.csv")
 # this array holds essentially the same information as Design1_Array, but this is for tie bar design 2
 # the design 2 steady state temperatures are generally much higher than design 1
 # design 2 is much more likely to overheat than design 1
 
-Top_oil_array = csv_to_array("/Users/madelineburrows/Desktop/ECEN 403/Transformer Top Oil Temp.csv")
+Top_oil_array = csv_to_array("Transformer Top Oil Temp.csv")
 # this array holds the top oil temperature for the 42 different transformers
 # the EPRI study listed 90 degrees Celsius as the top oil temp for every transformer
 # this array is somewhat unnecessary to validate against EPRI heat up models, but will be needed for ECEN 404
