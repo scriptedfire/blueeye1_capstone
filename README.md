@@ -85,3 +85,7 @@ See also the list of [contributors](https://github.com/scriptedfire/blueeye1_cap
   Boteler, David & Pirjola, Risto. (2016). 
   Modelling Geomagnetically Induced Currents. 
   Space Weather. 15. 10.1002/2016SW001499. 
+  
+  Application Guide: Computing Geomagnetically-Induced Current in the Bulk-Power System.
+  NERC: North American Electric Reliability Corporation, 
+  nerc.com/comm/PC/Geomagnetic Disturbance Task Force GMDTF 2013/GIC Application Guide 2013_approved.pdf. 
