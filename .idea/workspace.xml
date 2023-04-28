@@ -5,9 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="8ecf9fc9-a430-4060-8126-d6a302a7f78b" name="Changes" comment="Error exception code added">
-      <change afterPath="$PROJECT_DIR$/GUI/Polish_Grid/.Polish_grid.AUX.icloud" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/.EPRI thermal models.pdf.icloud" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/Transformer Thermal Capacity.py" beforeDir="false" afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/Transformer Thermal Capacity.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC_log.txt" beforeDir="false" afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC_log.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/TTC_log.txt" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -140,7 +140,14 @@
       <option name="project" value="LOCAL" />
       <updated>1682717250543</updated>
     </task>
-    <option name="localTasksCounter" value="7" />
+    <task id="LOCAL-00007" summary="Error exception code added">
+      <created>1682717652417</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1682717652417</updated>
+    </task>
+    <option name="localTasksCounter" value="8" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
