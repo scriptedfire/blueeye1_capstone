@@ -230,8 +230,3 @@ class Core():
 
         # load on file db into memory
         self.backup_db_conn.backup(self.db_conn)
-
-if __name__ == "__main__":
-    testcore = Core()
-    testdate = datetime(2023, 4, 27, 2, 30)
-    testcore.create_hour_of_data("/home/esanders/blueeye1_capstone/GUI/Polish_Grid/Polish_grid", testdate)

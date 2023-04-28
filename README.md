@@ -49,9 +49,11 @@ The NOAASolarStormDataMiner.py is easy to test. Just call it with the informatio
 
 To test the Transformer Thermal Capacity script, simply run the code and input the desired transformer model when prompted. The resulting plot can be compared to those in the EPRI study referrenced below. Similarly for the GIC solver, the code can be run and the results of the calculations will be printed to the terminal along with messages from the associated validation tests.
 
+To test GUI and core, simply run GUI.py, click Load Grid File > Polish_Grid > Polish_grid.AUX. Once the grid is loaded, it can be explored by zooming in (%50-%100 is recommended) and clicking on substation squares to navigate to the substation view, and from the bus buttons can be clicked to enter bus views. The back button returns to the previous view. Additionally, a simulation can be started, but may take a minute to initialize the first time.
+
 ## ✍️ Authors <a name = "authors"></a>
 
-- [@scriptedfire](https://github.com/scriptedfire) - GUI
+- [@scriptedfire](https://github.com/scriptedfire) - GUI and core
 - [@KMMasters](https://github.com/KMMasters) - GIC and TTC
 - [@stephenhurt99](https://github.com/stephenhurt99) - Electric Field Calculator and NOAA data miner
 

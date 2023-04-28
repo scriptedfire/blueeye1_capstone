@@ -146,8 +146,8 @@ class App(tk.Tk):
         # time input configuration
         self.hour_input.set("01")
         self.hour_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1,13))))
-        self.minute_input.set("01")
-        self.minute_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1,60))))
+        self.minute_input.set("00")
+        self.minute_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(0,60))))
         self.ampm_input.set("AM")
         self.ampm_input["values"] = ["AM", "PM"]
 
@@ -296,7 +296,7 @@ class App(tk.Tk):
             current_row = 2
 
             # create branch label
-            branch_label = ttk.Label(self.bus_frame, text="To " + str(to_buses[i]) + " at Sub " + str(self.bus_data[to_buses[i]]["sub_num"]) + ":")
+            branch_label = ttk.Label(self.bus_frame, text="To Bus " + str(to_buses[i]) + " at Sub " + str(self.bus_data[to_buses[i]]["sub_num"]) + ":")
             branch_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
             self.branch_display_vals[branches[i]] = {"branch_label":branch_label}
             current_row += 1
@@ -655,7 +655,9 @@ class App(tk.Tk):
         return "#%02x%02x%02x" % rgb  
 
     def simulation_loop(self):
-        "The gremlin that runs around and bangs on things."
+        """Loop that runs in a thread and carries out simulation playback.
+        The simulation runs at a scale of roughly 1 second per minute and loops after
+        it reaches an hour from start time."""
         local_core = Core()
         local_core.log_to_file("GUI", "Local Core Online")
         while(self.sim_running):
@@ -710,7 +712,7 @@ class App(tk.Tk):
             # update sim time
             sleep(1)
             self.sim_time += timedelta(minutes=1)
-            if(self.sim_time == (self.start_time + timedelta(minutes=59))):
+            if(self.sim_time == (self.start_time + timedelta(minutes=60))):
                 self.sim_time = self.start_time
 
     def play_or_pause_sim(self, *args):
@@ -732,8 +734,13 @@ class App(tk.Tk):
             minute = int(self.minute_input.get())
             ampm = self.ampm_input.get()
 
+            # convert from 12hr to 24hr
             if(ampm == "PM"):
-                hour += 12
+                if(hour != 12):
+                    hour += 12
+
+            if(ampm == "AM" and hour == 12):
+                hour = 0
 
             # create start datetime
             set_start_time = datetime(year, month, day, hour, minute)
@@ -759,7 +766,7 @@ class App(tk.Tk):
         else:
             # kill simulation loop
             self.sim_running = False
-            self.sim_thread.join()
+            self.sim_thread.join(0.5)
 
             # reopen database
             self.core.reopen_conns()
@@ -776,7 +783,7 @@ class App(tk.Tk):
     def on_closing(self):
         if(self.sim_running):
             self.sim_running = False
-            self.sim_thread.join()
+            self.sim_thread.join(0.5)
 
         self.destroy()
 
