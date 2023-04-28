@@ -173,8 +173,13 @@ for i in range(np.shape(Design1_array)[0]):
     # looping through all the design 1 transformer models
     key = 'T{}, design {}'.format(i + 1, 1)
     # creating a key based on the loop index and design number
-    Y = hs_temp_rise_calculation(EPRI_Iss, Design1_array[i][1:8].astype(np.float32), tau_1, GIC_array)
-    log_message('Calculating heat up for ' + Design1_array[i][0] + ' Design 1')
+    try:
+        # calling function to calculate heat up
+        # using try catch to pick up errors
+        Y = hs_temp_rise_calculation(EPRI_Iss, Design1_array[i][1:8].astype(np.float32), tau_1, GIC_array)
+        log_message('Calculating heat up for ' + Design1_array[i][0] + ' Design 1')
+    except Exception as e:
+        log_message('An unexpected error occurred when calculating heat up: ' + str(e))
     # specifying Tss from function as Design1_array[i][1:8].astype(np.float32)
     # excluding [i][0] because that's the transformer number, not Tss data
     # converting to floats, encountered errors when not designating the type as float32
@@ -209,8 +214,11 @@ for i in range(np.shape(Design1_array)[0]):
 # this loop does the same thing as the one above, but for the design 2 models
 for i in range(np.shape(Design2_array)[0]):
     key = 'T{}, design {}'.format(i + 1, 2)
-    Y = hs_temp_rise_calculation(EPRI_Iss, Design2_array[i][1:8].astype(np.float32), tau_2, GIC_array)
-    log_message('Calculating heat up for ' + Design2_array[i][0] + ' Design 2')
+    try:
+        Y = hs_temp_rise_calculation(EPRI_Iss, Design2_array[i][1:8].astype(np.float32), tau_2, GIC_array)
+        log_message('Calculating heat up for ' + Design2_array[i][0] + ' Design 2')
+    except Exception as e:
+        log_message('An unexpected error occurred when calculating heat up: ' + str(e))
     heatup_dict[key] = Y
     log_message('Checking if critical temperature reached for ' + Design2_array[i][0] + ' Design 2')
     for j in range(np.shape(Y)[0]):

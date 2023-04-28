@@ -4,14 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="8ecf9fc9-a430-4060-8126-d6a302a7f78b" name="Changes" comment="updated csv files read path">
-      <change beforePath="$PROJECT_DIR$/.idea/blueeye1_capstone.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/blueeye1_capstone.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/.3002009001 EPRI Transformer Thermal Assessment #1 (1).pdf.icloud" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver.py" beforeDir="false" afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC_log.txt" beforeDir="false" afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC_log.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/TTC_log.txt" beforeDir="false" afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/TTC_log.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/GUI/Polish_Grid/Polish_grid.AUX" beforeDir="false" />
+    <list default="true" id="8ecf9fc9-a430-4060-8126-d6a302a7f78b" name="Changes" comment="Error exception code added">
+      <change afterPath="$PROJECT_DIR$/GUI/Polish_Grid/.Polish_grid.AUX.icloud" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/.EPRI thermal models.pdf.icloud" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/Transformer Thermal Capacity.py" beforeDir="false" afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/Transformer Thermal Capacity.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -32,14 +28,15 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ASKED_ADD_EXTERNAL_FILES&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/madelineburrows/Documents/GitHub/blueeye1_capstone/GIC and TTC/GIC Solver and TTC&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ASKED_ADD_EXTERNAL_FILES": "true",
+    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "last_opened_file_path": "/Users/madelineburrows/Documents/GitHub/blueeye1_capstone/GIC and TTC/GIC Solver and TTC"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC" />
@@ -136,7 +133,14 @@
       <option name="project" value="LOCAL" />
       <updated>1682593366630</updated>
     </task>
-    <option name="localTasksCounter" value="6" />
+    <task id="LOCAL-00006" summary="Error exception code added">
+      <created>1682717250543</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1682717250543</updated>
+    </task>
+    <option name="localTasksCounter" value="7" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -155,6 +159,7 @@
     <MESSAGE value="Adding notation to scripts" />
     <MESSAGE value="Log files added" />
     <MESSAGE value="updated csv files read path" />
-    <option name="LAST_COMMIT_MESSAGE" value="updated csv files read path" />
+    <MESSAGE value="Error exception code added" />
+    <option name="LAST_COMMIT_MESSAGE" value="Error exception code added" />
   </component>
 </project>
