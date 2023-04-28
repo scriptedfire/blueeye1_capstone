@@ -4,9 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="8ecf9fc9-a430-4060-8126-d6a302a7f78b" name="Changes" comment="">
+    <list default="true" id="8ecf9fc9-a430-4060-8126-d6a302a7f78b" name="Changes" comment="updated csv files read path">
+      <change beforePath="$PROJECT_DIR$/.idea/blueeye1_capstone.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/blueeye1_capstone.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/.3002009001 EPRI Transformer Thermal Assessment #1 (1).pdf.icloud" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver.py" beforeDir="false" afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC_log.txt" beforeDir="false" afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC_log.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/TTC_log.txt" beforeDir="false" afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/TTC_log.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/GUI/Polish_Grid/Polish_grid.AUX" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -117,13 +122,39 @@
       <option name="project" value="LOCAL" />
       <updated>1682577985098</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="Log files added">
+      <created>1682593145478</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1682593145479</updated>
+    </task>
+    <task id="LOCAL-00005" summary="updated csv files read path">
+      <created>1682593366630</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1682593366630</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
   <component name="VcsManagerConfiguration">
     <option name="ADD_EXTERNAL_FILES_SILENTLY" value="true" />
     <MESSAGE value="Adding notation to scripts" />
     <MESSAGE value="Log files added" />
-    <option name="LAST_COMMIT_MESSAGE" value="Log files added" />
+    <MESSAGE value="updated csv files read path" />
+    <option name="LAST_COMMIT_MESSAGE" value="updated csv files read path" />
   </component>
 </project>

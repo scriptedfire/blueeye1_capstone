@@ -641,18 +641,35 @@ log_message('Locating transmission line end points for 6 bus case')
 
 
 # creating arrays for the 20 bus case and the 6 bus case
-length_array = length_calculator(line_data)
-log_message('Calculating line lengths for 20 bus case')
-six_bus_length = length_calculator(six_bus_line_data)
-log_message('Calculating line lengths for 6 bus case')
+# using try catch to avoid errors
+
+try:
+    length_array = length_calculator(line_data)
+    log_message('Calculating line lengths for 20 bus case')
+except Exception as e:
+    log_message('An unexpected error occurred when calculating the line length: ' + str(e))
+
+try:
+    six_bus_length = length_calculator(six_bus_line_data)
+    log_message('Calculating line lengths for 6 bus case')
+except Exception as e:
+    log_message('An unexpected error occurred when calculating the line length: ' + str(e))
 
 
 # creating arrays to hold the calculated induced voltage for the two test cases
+# try catch to catch errors
 
-six_bus_iv = iv_calculator(six_bus_field, six_bus_length)
-log_message('Calculating induced voltages for 6 bus case')
-twenty_bus_iv = iv_calculator(E_field, length_array)
-log_message('Calculating induced voltages for 20 bus case')
+try:
+    six_bus_iv = iv_calculator(six_bus_field, six_bus_length)
+    log_message('Calculating induced voltages for 6 bus case')
+except Exception as e:
+    log_message('An unexpected error occurred when calculating the induced voltage: ' + str(e))
+
+try:
+    twenty_bus_iv = iv_calculator(E_field, length_array)
+    log_message('Calculating induced voltages for 20 bus case')
+except Exception as e:
+    log_message('An unexpected error occurred when calculating the induced voltage: ' + str(e))
 
 
 # creating dataframes of both input voltage arrays from 20 bus case
@@ -779,14 +796,24 @@ else:
 
 
 # creating array for the six bus case norton equivalent current
-six_bus_ic = equivalent_current(six_bus_iv[0], six_bus_line_array)
-log_message('Calculating Norton Equivalent Current for 6 bus case')
+# try catch to get errors
+try:
+    six_bus_ic = equivalent_current(six_bus_iv[0], six_bus_line_array)
+    log_message('Calculating Norton Equivalent Current for 6 bus case')
+except Exception as e:
+    log_message('An unexpected error occurred when calculating norton equivalent current: ' + str(e))
+
 # rounding current values to match test case
 six_bus_ic[:, 1] = np.round(six_bus_ic[:, 1], 2)
 
 # creating array to hold norton equivalent currents for twenty bus case, Northward field input
-twenty_bus_N_ic = equivalent_current(twenty_bus_iv[0], line_array)
-log_message('Calculating Norton Equivalent Current for 20 bus case, Northward field')
+# try catch to get errors
+try:
+    twenty_bus_N_ic = equivalent_current(twenty_bus_iv[0], line_array)
+    log_message('Calculating Norton Equivalent Current for 20 bus case, Northward field')
+except Exception as e:
+    log_message('An unexpected error occurred when calculating norton equivalent current: ' + str(e))
+
 twenty_bus_N_ic[:, 1] = np.round(twenty_bus_N_ic[:, 1], 2)
 
 
@@ -837,14 +864,23 @@ for i in range(np.shape(line_array)[0]):
 
 
 # creating array for six bus case
-six_bus_nodes = find_nodes(six_bus_line_array)
-log_message('Locating DC model nodes for 6 bus case')
+# try catch again to pick up errors
+try:
+    six_bus_nodes = find_nodes(six_bus_line_array)
+    log_message('Locating DC model nodes for 6 bus case')
+except Exception as e:
+    log_message('An unexpected error occurred when locating DC model nodes: ' + str(e))
 
 # creating array for 20 bus case
-big_case_nodes = find_nodes(line_array)
-log_message('Locating DC model nodes for 20 bus case')
-# all the correct buses are located, but not accounting for neutral
-# must account for neutral at substation 4 and 5 b/c GY-GY and GY-GY-D transformers
+# try catch again to pick up errors
+try:
+    big_case_nodes = find_nodes(line_array)
+    log_message('Locating DC model nodes for 20 bus case')
+    # all the correct buses are located, but not accounting for neutral
+    # must account for neutral at substation 4 and 5 b/c GY-GY and GY-GY-D transformers
+except Exception as e:
+    log_message('An unexpected error occurred when locating DC model nodes: ' + str(e))
+
 
 nodes_df = pd.DataFrame(six_bus_nodes, columns=['Node Number', 'Bus Number'])
 nodes_df['Bus Number'] = nodes_df['Bus Number'].astype(int)
@@ -856,8 +892,11 @@ print("")
 expected_sixb_nodes = np.array([[1, 2], [2, 3], [3, 4], [4, 5]])
 
 # creating array for 6 bus case current injection vector
-six_bus_injected = current_injection_vector_generator(six_bus_nodes, six_bus_ic)
-log_message('Generating current injection vector for 6 bus case')
+try:
+    six_bus_injected = current_injection_vector_generator(six_bus_nodes, six_bus_ic)
+    log_message('Generating current injection vector for 6 bus case')
+except Exception as e:
+    log_message('An unexpected error occurred when creating current injection vector: ' + str(e))
 
 # creating a dataframe from the array above
 injected_df = pd.DataFrame(six_bus_injected, columns=['Current Injection Vector'])
@@ -871,20 +910,30 @@ expected_sixb_injected_vector = np.array([[792.83], [-792.83], [1000.39], [-1000
 print("Expected Six Bus Injected Current Vector")
 print(expected_sixb_injected_vector,)
 
+# comparing arrays for validation
 if compare_arrays(expected_sixb_injected_vector, six_bus_injected):
     print("Current Injection Test successful: The arrays are within 1% of each other.\n")
 else:
     print("Current Injection Test failed: The arrays are not within 1% of each other.\n")
 
+# generating the conductance matrices and circuit relationship details for six bus case
+# using same function to generate matrices for modified 6 bus case that has a GIC blocking device on T1
+# try catch to pick up errors
+try:
+    six_b_conductance, six_b_relation_array, six_b_line_relation = \
+        conductance_matrix_node_relation_generator(six_bus_nodes, six_bus_line_array,
+                                                   six_bus_transformer_array, six_bus_sub_array, six_bus_ic)
+    log_message('Generating conductance matrix')
+    log_message('Gathering circuit relationship details for current calculations')
+except Exception as e:
+    log_message('An unexpected error occurred when creating current injection vector: ' + str(e))
 
-six_b_conductance, six_b_relation_array, six_b_line_relation = \
-    conductance_matrix_node_relation_generator(six_bus_nodes, six_bus_line_array,
-                                               six_bus_transformer_array, six_bus_sub_array, six_bus_ic)
-log_message('Generating conductance matrix')
-log_message('Gathering circuit relationship details for current calculations')
-sb_bd_conductance, sb_bd_relation_array, sb_bd_line_relation = \
-    conductance_matrix_node_relation_generator(six_bus_nodes, six_bus_line_array,
-                                               six_bus_trans_array_w_bd, six_bus_sub_array, six_bus_ic)
+try:
+    sb_bd_conductance, sb_bd_relation_array, sb_bd_line_relation = \
+        conductance_matrix_node_relation_generator(six_bus_nodes, six_bus_line_array,
+                                                   six_bus_trans_array_w_bd, six_bus_sub_array, six_bus_ic)
+except Exception as e:
+    log_message('An unexpected error occurred when creating current injection vector: ' + str(e))
 
 print("Calculated Six Bus Conductance Matrix")
 print(six_b_conductance, "\n")
@@ -896,17 +945,25 @@ expected_sixb_cond_matrix = np.array([[3.578, -0.851, 0, 0], [-0.851, 19.601, -1
 print("Expected Conductance Matrix for Six Bus Case:")
 print(expected_sixb_cond_matrix, "\n")
 
+# comparing arrays for validation
 if compare_arrays(expected_sixb_cond_matrix, six_b_conductance):
     print("Conduction Matrix Generation Test successful: The arrays are within 1% of each other.\n")
 else:
     print("Conduction Matrix Generation Test failed: The arrays are not within 1% of each other.\n")
 
+# creating the nodal voltage matrix for the 6 bus and modified six bus cases
+# try catch to pick up errors
+try:
+    six_bus_nodal_voltage = node_voltage_calculator(six_b_conductance, six_bus_injected)
+    log_message('Generating nodal voltage matrix')
+except Exception as e:
+    log_message('An unexpected error occurred when generating nodal voltage matrix: ' + str(e))
 
-
-
-six_bus_nodal_voltage = node_voltage_calculator(six_b_conductance, six_bus_injected)
-log_message('Generating nodal voltage matrix')
-sbbd_nv = node_voltage_calculator(sb_bd_conductance, six_bus_injected)
+try:
+    # this holds the nodal voltage info for the modified six bus case
+    sbbd_nv = node_voltage_calculator(sb_bd_conductance, six_bus_injected)
+except Exception as e:
+    log_message('An unexpected error occurred when generating nodal voltage matrix: ' + str(e))
 
 sbnv_df = pd.DataFrame(six_bus_nodal_voltage, columns=['Nodal Voltage'])
 print("Calculated Nodal Voltages for Six Bus Case")
@@ -917,15 +974,24 @@ print("Expected Nodal Voltages for Six Bus Case")
 expected_sb_nv = np.array([[230.23], [36.34], [87.28], [-280.20]])
 print(expected_sb_nv)
 
+# comparing arrays for validation
 if compare_arrays(expected_sb_nv, six_bus_nodal_voltage):
     print("Nodal Voltage Test successful: The arrays are within 1% of each other.\n")
 else:
     print("Nodal Voltage Test failed: The arrays are not within 1% of each other.\n")
 
+# determining transformer GIC for six bus and modified six bus
+try:
+    six_b_t_currents = transformer_current_calculator(six_b_relation_array, six_bus_nodal_voltage)
+    log_message('Calculating transformer currents')
+except Exception as e:
+    log_message('An unexpected error occurred when determining the transformer current: ' + str(e))
 
-six_b_t_currents = transformer_current_calculator(six_b_relation_array, six_bus_nodal_voltage)
-log_message('Calculating transformer currents')
-sbbd_t_currents = transformer_current_calculator(sb_bd_relation_array, sbbd_nv)
+try:
+    # this holds the modified 6 bus transformer currents
+    sbbd_t_currents = transformer_current_calculator(sb_bd_relation_array, sbbd_nv)
+except Exception as e:
+    log_message('An unexpected error occurred when determining the transformer current: ' + str(e))
 
 
 tca_df = pd.DataFrame(six_b_t_currents, columns=['Name', 'Type', 'Current (A)'])
@@ -948,6 +1014,7 @@ sbtc_c_only = np.zeros((np.shape(six_b_t_currents)[0], 1))
 for i in range(np.shape(six_b_t_currents)[0]):
     sbtc_c_only[i][0] = six_b_t_currents[i][2]
 
+# comparing for validation
 if compare_arrays(expectedsb_t_current_only, sbtc_c_only):
     print("Transformer Current Test successful: The arrays are within 1% of each other.\n")
 else:
@@ -957,12 +1024,16 @@ print("Calculated Transformer Current when GIC blocking device added to T1")
 print(sbbd_tc_df.to_string(index=False))
 print("")
 
+# checking to make sure that GIC blocking device on T1 is functioning properly
 if sbbd_t_currents[0][2] == 0:
     print("Test successful. GIC blocking device functioning properly\n")
 
 # calculating line currents for six bus case
-six_b_line_currents = line_GIC_calculator(six_b_line_relation, six_bus_nodal_voltage)
-log_message('Calculating transmission line GIC')
+try:
+    six_b_line_currents = line_GIC_calculator(six_b_line_relation, six_bus_nodal_voltage)
+    log_message('Calculating transmission line GIC')
+except Exception as e:
+    log_message('An unexpected error occurred when determining transmission line GIC: ' + str(e))
 
 # creating data frame of line current data
 sblc_df = pd.DataFrame(six_b_line_currents, columns=['Line Number', 'GIC (A)'])
@@ -981,18 +1052,29 @@ sblc_only = np.zeros((np.shape(six_b_line_currents)[0], 1))
 for i in range(np.shape(six_b_line_currents)[0]):
     sblc_only[i][0] = six_b_line_currents[i][1]
 
-
+# comparing arrays for validation
 if compare_arrays(esblc_only, sblc_only):
     print("Transmission Line GIC Test successful: The arrays are within 1% of each other.\n")
 else:
     print("Transmission Line GIC Test failed: The arrays are not within 1% of each other.\n")
 
-sb_effective_auto = effective_auto_gic(six_bus_transformer_array, six_b_t_currents)
-log_message('Calculating effective GIC for autotransformers')
+try:
+    # calculating the effective GIC for auto in six bus case
+    sb_effective_auto = effective_auto_gic(six_bus_transformer_array, six_b_t_currents)
+    log_message('Calculating effective GIC for autotransformers')
+except Exception as e:
+    log_message('An unexpected error occurred when determining the effective autotransformer GIC: ' + str(e))
 
+# putting the effective auto GIC into a dataframe
 sb_ea_df = pd.DataFrame(sb_effective_auto, columns=['Name', 'Type', 'Current (A)'])
 
+# concatting the dataframe above with my previous dataframe of the six bus transformer currents
+# new dataframe holds all transformer current information
 total_sb_tc = pd.concat([tca_df, sb_ea_df], ignore_index=True)
 
-export_data_csv(total_sb_tc, sblc_df, 'TransformerCurrents.csv', 'TransmissionLineGIC.csv')
-log_message('Exporting data')
+try:
+    # exporting data
+    export_data_csv(total_sb_tc, sblc_df, 'TransformerCurrents.csv', 'TransmissionLineGIC.csv')
+    log_message('Exporting data')
+except Exception as e:
+    log_message('An unexpected error occurred when exporting the data: ' + str(e))
