@@ -1,6 +1,7 @@
 import sqlite3
 from datetime import datetime, timedelta
 from random import randrange
+from time import time
 
 class Core():
     def __init__(self):
@@ -130,6 +131,8 @@ class Core():
         transaction.close()
 
     def load_grid_data(self, grid_name, substation_data, bus_data, branch_data):
+        start = time()
+
         self.initialize_tables()
 
         # ignore if grid already exists
@@ -159,6 +162,8 @@ class Core():
         self.log_to_file("Core", "Branches Added")
 
         self.save_to_file()
+
+        self.log_to_file("Core", "Loading Grid Took: " + str(time() - start) + " seconds")
 
     ###################
     # Misc. Functions #
