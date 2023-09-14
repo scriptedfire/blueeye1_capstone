@@ -85,11 +85,11 @@ def B_to_E(conductivity_model: pd.DataFrame, B:np.array, time:np.array, sign:int
     # interpolate B field to be spaced by 60 seconds
     #############################################
     # Comment these 3 lines out to test with Electric_field_calculator_test_bench.py
-    x_array_B_field = np.arange(time[0], time[time.size - 1], 60)
-    
-    B = np.interp(x_array_B_field, time, B)
-    
-    time = x_array_B_field
+    #x_array_B_field = np.arange(time[0], time[time.size - 1], 60)
+    #
+    #B = np.interp(x_array_B_field, time, B)
+    #
+    #time = x_array_B_field
 
     ###########################################
     
@@ -176,7 +176,7 @@ def calculate_e_field(conductivity_model:pd.DataFrame, B_field:pd.DataFrame) -> 
                    
     return E_field
 
-def ElectricFieldCalculator(resistivity_data:pd.DataFrame, storm_data:pd.DataFrame, min_longitude:float, max_longitude:float, min_latitude:float, max_latitude:float, granularity:int, log_file:object) -> pd.DataFrame:
+def ElectricFieldCalculator(resistivity_data:pd.DataFrame, storm_data:pd.DataFrame, min_longitude:float, max_longitude:float, min_latitude:float, max_latitude:float, log_file:object) -> pd.DataFrame:
     """ This method is the parent function that should be called by the Application core.
         @param: resistivity_data: dataframe of the 1-D Earth conductivity
         @param: solar_storm:        solar storm data from NOAA
@@ -196,7 +196,7 @@ def ElectricFieldCalculator(resistivity_data:pd.DataFrame, storm_data:pd.DataFra
     """
     log_file.write("Calcaulating magnetic field...\n")
     try:
-        B_field_data = MagneticFieldPredictor.magnetic_field_predictor(storm_data, min_longitude, max_longitude, min_latitude, max_latitude, granularity)
+        B_field_data = MagneticFieldPredictor.magnetic_field_predictor(storm_data, min_longitude, max_longitude, min_latitude, max_latitude)
     except Exception as e:
         e = str(e)
         log_file.write('An Unexpected error occured when attempting to predict the magnetic field\n')
