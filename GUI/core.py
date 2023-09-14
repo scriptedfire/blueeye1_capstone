@@ -1,9 +1,16 @@
 import sqlite3
 from datetime import datetime, timedelta
+from threading import Thread, Semaphore, Event
 from random import randrange
 from time import time
+from GUI import App
 
 class Core():
+    # Object for GUI subsystem
+    app = None
+    requests_sem = None
+    requests_queue = []
+
     def __init__(self):
         # initialize in memory and on file db
         self.db_conn = sqlite3.connect(":memory:")
@@ -12,10 +19,32 @@ class Core():
         # load on file db into memory
         self.backup_db_conn.backup(self.db_conn)
 
+        # initialize requests semaphore
+        self.requests_sem = Semaphore(0)
+
         self.log_to_file("Core", "Core Initialized")
 
-    def save_to_file(self):
-        self.db_conn.backup(self.backup_db_conn)
+    def send_request(self, command, params, callback):
+        request_event = Event()
+        request = {"event" : request_event, "command" : command,
+                   "params" : params, "callback" : callback}
+        self.requests_queue.append(request)
+        self.requests_sem.release()
+        return request_event
+    
+    # TODO: request eating loop
+
+    #####################
+    # Startup Functions #
+    #####################
+
+    def start_gui(self):
+        self.app = App(self)
+        self.app.mainloop()
+
+    #######################
+    # Grid Data Functions #
+    #######################
 
     def initialize_tables(self):
         transaction = self.db_conn.cursor()
@@ -44,9 +73,10 @@ class Core():
         transaction.execute("""CREATE TABLE IF NOT EXISTS Branch (
         FROM_BUS integer NOT NULL,
         TO_BUS integer NOT NULL,
+        CIRCUIT integer NOT NULL,
         GRID_NAME text NOT NULL,
         HAS_TRANSFORMER boolean NOT NULL,
-        PRIMARY KEY (FROM_BUS, TO_BUS, GRID_NAME),
+        PRIMARY KEY (FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME),
         FOREIGN KEY (FROM_BUS, GRID_NAME) REFERENCES Bus (BUS_NUM, GRID_NAME),
         FOREIGN KEY (TO_BUS, GRID_NAME) REFERENCES Bus (BUS_NUM, GRID_NAME)
         )""")
@@ -54,22 +84,19 @@ class Core():
         transaction.execute("""CREATE TABLE IF NOT EXISTS Datapoint (
         FROM_BUS integer NOT NULL,
         TO_BUS integer NOT NULL,
+        CIRCUIT integer NOT NULL,
         GRID_NAME text NOT NULL,
         DPOINT_TIME text NOT NULL,
         DPOINT_GIC real NOT NULL,
         DPOINT_VLEVEL real,
         DPOINT_TTC real,
-        PRIMARY KEY (DPOINT_TIME, FROM_BUS, TO_BUS, GRID_NAME),
-        FOREIGN KEY (FROM_BUS, TO_BUS, GRID_NAME) REFERENCES Branch (FROM_BUS, TO_BUS, GRID_NAME)
+        PRIMARY KEY (DPOINT_TIME, FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME),
+        FOREIGN KEY (FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME) REFERENCES Branch (FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME)
         )""")
 
         self.db_conn.commit()
 
         transaction.close()
-
-    ###############################
-    # Grid Data Loading Functions #
-    ###############################
 
     def add_grid_if_not_exists(self, grid_name):
         transaction = self.db_conn.cursor()
@@ -119,18 +146,18 @@ class Core():
 
         transaction.close()
 
-    def add_branch_and_transformer(self, from_bus, to_bus, has_trans, grid_name):
+    def add_branch_and_transformer(self, from_bus, to_bus, circuit, has_trans, grid_name):
         transaction = self.db_conn.cursor()
 
         # load branch entity into db
-        transaction.execute("""INSERT INTO Branch(FROM_BUS, TO_BUS, GRID_NAME, HAS_TRANSFORMER)
-        VALUES(?,?,?,?)""", [from_bus, to_bus, grid_name, has_trans])
+        transaction.execute("""INSERT INTO Branch(FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME, HAS_TRANSFORMER)
+        VALUES(?,?,?,?,?)""", [from_bus, to_bus, grid_name, circuit, has_trans])
 
         self.db_conn.commit()
 
         transaction.close()
 
-    def load_grid_data(self, grid_name, substation_data, bus_data, branch_data):
+    def save_grid_data(self, grid_name, substation_data, bus_data, branch_data):
         start = time()
 
         self.initialize_tables()
@@ -157,7 +184,8 @@ class Core():
         for branch in branch_data:
             from_bus_num = branch[0]
             to_bus_num = branch[1]
-            self.add_branch_and_transformer(from_bus_num, to_bus_num, branch_data[branch]["has_trans"], grid_name)
+            circuit_num = branch[2]
+            self.add_branch_and_transformer(from_bus_num, to_bus_num, circuit_num, branch_data[branch]["has_trans"], grid_name)
 
         self.log_to_file("Core", "Branches Added")
 
@@ -173,6 +201,7 @@ class Core():
         with open("log.txt", "a+") as logfile:
             logfile.write("From " + source + ": " + msg + "\n")
 
+    # TODO: fix or remove
     def create_hour_of_data(self, grid_name, start_time):
         transaction = self.db_conn.cursor()
 
@@ -224,6 +253,11 @@ class Core():
 
         return data
     
+    def save_to_file(self):
+        self.db_conn.backup(self.backup_db_conn)
+
+    # TODO: Remove the following?
+    
     def close_conns(self):
         self.backup_db_conn.close()
         self.db_conn.close()
@@ -235,3 +269,7 @@ class Core():
 
         # load on file db into memory
         self.backup_db_conn.backup(self.db_conn)
+
+if __name__ == "__main__":
+    core = Core()
+    core.start_gui()

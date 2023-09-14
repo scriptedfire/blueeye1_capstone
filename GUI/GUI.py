@@ -7,7 +7,6 @@ from math import sin, cos, radians
 from datetime import datetime, timedelta
 from threading import Thread
 from time import sleep
-from core import Core
 
 class App(tk.Tk):
     # constant: display size of substation squares
@@ -78,9 +77,11 @@ class App(tk.Tk):
     # state from running simulation: for pause/play to work if grid is switched
     grid_name_at_sim_start = ""
 
-    def __init__(self):
+    def __init__(self, core):
         super().__init__()
         
+        self.core = core
+
         self.title("Space Weather Analysis Tool")
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
@@ -89,7 +90,6 @@ class App(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         self.create_body_frame()
-        self.core = Core()
 
     #####################################
     # UI Creation/Destruction Functions #
@@ -341,69 +341,176 @@ class App(tk.Tk):
     # State Loading Functions #
     ###########################
 
-    def load_file_process_sections(self, section):
-        "Helper to make file data splitting process more readable"
-        return list(map(lambda line : (' '.join(line.split())).split('"'), section.split('\n')))
-    
-    def generate_sub_location(self, from_sub, to_sub, to_id):
-        "Helper for placing substations that don't have latitude and longitude defined"
-        # initialize diagnostic values
-        shift_count = 0
-        ultrashift_count = 0
-
-        toss_angle = from_sub["next_angle"]
-        initial_toss_percent = self.toss_percent
-        toss_magnitude = (self.max_long - self.min_long) * initial_toss_percent
-
-        # recursively look for an unoccupied space to locate the sub (at 100% zoom)
-        iterations = 0
-        while(True):
-            # toss sub
-            to_sub_lat = from_sub["lat"] + toss_magnitude * sin(radians(toss_angle))
-            to_sub_long = from_sub["long"] + toss_magnitude * cos(radians(toss_angle))
-
-            # get location at 100% zoom
-            to_x = self.long_to_x(to_sub_long)
-            to_y = self.lat_to_y(to_sub_lat)
-
-            # check for overlap
-            pixel_overlap = self.check_and_update_substation_pixels(to_id, to_x, to_y)
-
-            # if no overlap, locate substation there, otherwise change to a different vector and recurse
-            if(pixel_overlap == 0):
-                # update sub data
-                to_sub["lat"] = to_sub_lat
-                to_sub["long"] = to_sub_long
-                from_sub["next_angle"] = toss_angle + self.placement_angle
-                break
-            else:
-                shift_count += 1
-                toss_angle += self.placement_angle
-                iterations += 1
-
-                # after all angles have been checked, move further out
-                if(iterations > int(360 / self.placement_angle)):
-                    initial_toss_percent += 0.01
-                    toss_magnitude = (self.max_long - self.min_long) * initial_toss_percent
-                    iterations = 0
-                    ultrashift_count += 1
-        
-        # return diagnostics
-        return (shift_count, ultrashift_count)
-
     def load_file(self, *args):
-        "Loads grid file in AUX format chosen by the user into state"
-        filetypes = (("AUX files", "*.AUX"),)
+        "Loads grid file in aux format (legacy variable names, older file headers) chosen by the user into state"
+        filetypes = (("aux files", "*.aux"),("AUX files", "*.AUX"),)
 
         # open file
         try:
             with fdialog.askopenfile(filetypes=filetypes) as grid_file:
-                # split file data into sections, sections into lines, and lines into values
-                fdata = list(map(self.load_file_process_sections, grid_file.read().split("\n\n")))
+                f_str = grid_file.read()
 
-                if(len(fdata) != 33):
-                    messagebox.showerror("file load error", "Failed to load file: may have been imported incorrectly")
-                    return
+                # detect whether or not legacy headers are in use
+                # TODO: support legacy headers
+                legacy_headers = False
+                if "DATA (" in f_str:
+                    legacy_headers = True
+
+                f_data = {}
+
+                # parse the data into a dictionary structure
+                if not legacy_headers:
+                    # initialize and run through state machine that parses a PowerWorld aux file
+                    # into a dictionary of sections, each containing a list of items within
+                    # that section, the states are:
+                    # waiting, section_header, waiting_data_headers,
+                    # data_headers, waiting_data, data, datapoint, quoted
+                    # ignore_line, ignore_block
+                    # TODO: ignore line in waiting state
+                    # TODO: improve ignore block
+                    parser_state = "waiting"
+                    accumulator = ""
+                    section_header = None
+                    branch_section = 0
+                    data_headers = []
+                    cur_data = 0
+                    data_line = {}
+                    for c in f_str:
+                        if(parser_state == "waiting"):
+                            # section header not yet reached
+                            if(c.isspace()):
+                                continue
+
+                            # section header reached, begin building
+                            accumulator += c
+                            parser_state = "section_header"
+                        elif(parser_state == "section_header"):
+                            # end of section header reached
+                            if(c.isspace()):
+                                # handle two "Branch" sections
+                                if(accumulator == "Branch"):
+                                    accumulator += str(branch_section)
+                                    branch_section += 1
+
+                                section_header = accumulator
+                                accumulator = ""
+                                f_data[section_header] = []
+                                parser_state = "waiting_data_headers"
+                                continue
+
+                            # accumulate section header
+                            accumulator += c
+                        elif(parser_state == "waiting_data_headers"):
+                            if(c == '('):
+                                parser_state = "data_headers"
+                                continue
+
+                            if not(c.isspace()):
+                                messagebox.showerror("file load error", "Unexpected character before data headers in " + section_header + " section")
+                                return
+                        elif(parser_state == "data_headers"):
+                            # push a data header and change states
+                            if(c == ')'):
+                                data_headers.append(accumulator)
+                                accumulator = ""
+                                parser_state = "waiting_data"
+                                continue
+                            # push a data header
+                            if(c == ','):
+                                data_headers.append(accumulator)
+                                accumulator = ""
+                                continue
+
+                            # accumulate a data header
+                            accumulator += c
+                        elif(parser_state == "waiting_data"):
+                            if(c == '{'):
+                                parser_state = "data"
+                                continue
+
+                            if not(c.isspace()):
+                                messagebox.showerror("file load error", "Unexpected character before data in " + section_header + " section")
+                                return
+                        elif(parser_state == "data"):
+                            if(c == '}'):
+                                if(cur_data != 0):
+                                    messagebox.showerror("file load error", "Malformed data in " + section_header + " section")
+                                    return
+                                section_header = None
+                                data_headers = []
+                                parser_state = "waiting"
+                                continue
+                            if(c == '\"'):
+                                parser_state = "quoted"
+                                continue
+                            if(c == '/'):
+                                accumulator += c
+                                if(accumulator == "//"):
+                                    accumulator = ""
+                                    parser_state = "ignore_line"
+                                continue
+                            if(c == '<'):
+                                parser_state = "ignore_block"
+                                continue
+                            if(c.isspace()):
+                                continue
+
+                            # datapoint hit
+                            accumulator += c
+                            parser_state = "datapoint"
+                        elif(parser_state == "datapoint"):
+                            if(c.isspace()):
+                                try:
+                                    data_line[data_headers[cur_data]] = accumulator
+                                except:
+                                    print(data_line)
+                                    print(data_headers)
+                                    print(cur_data)
+                                    break
+                                cur_data += 1
+                                if(cur_data == len(data_headers)):
+                                    f_data[section_header].append(data_line)
+                                    data_line = {}
+                                    cur_data = 0
+                                accumulator = ""
+                                parser_state = "data"
+                                continue
+
+                            # accumulate datapoint
+                            accumulator += c
+                        elif(parser_state == "quoted"):
+                            if(c == '\"'):
+                                data_line[data_headers[cur_data]] = accumulator
+                                cur_data += 1
+                                if(cur_data == len(data_headers)):
+                                    f_data[section_header].append(data_line)
+                                    data_line = {}
+                                    cur_data = 0
+                                accumulator = ""
+                                parser_state = "data"
+                                continue
+
+                            # accumulate quoted datapoint
+                            accumulator += c
+                        elif(parser_state == "ignore_line"):
+                            if(c == '\n'):
+                                parser_state = "data"
+                        elif(parser_state == "ignore_block"):
+                            if(c == '>'):
+                                parser_state = "data"
+
+                    # find line and transformer sections
+                    branch_to_type = {}
+                    for section in f_data:
+                        if(section[:6] == "Branch"):
+                            if(f_data[section][0]["BranchDeviceType"] == "Line"):
+                                branch_to_type[section] = "Line"
+                            elif(f_data[section][0]["BranchDeviceType"] == "Transformer"):
+                                branch_to_type[section] = "Transformer"
+
+                    # move line and transformer sections
+                    for section in branch_to_type:
+                        f_data[branch_to_type[section]] = f_data.pop(section)
                 
                 # clear any active views other than grid
                 if(self.sub_view_active):
@@ -416,132 +523,64 @@ class App(tk.Tk):
                 self.grid_canvas_size = 2000
 
                 # get substation data
-                substation_fdata = fdata[27][3:-1]
-
-                # extract relevant data and load into state
-                located_substations_lat = []
-                located_substations_long = []
-                located_substations_ids = []
-                next_angle = self.placement_angle
+                # TODO: handle missing latitude or longitude data
                 self.substation_data = {}
                 self.substation_pixels = {}
-                for item in substation_fdata:
-                    id = int(item[0])
-                    coords = item[4].split(' ')
-
-                    # substation w/o coordinates
-                    if len(coords) == 2:
-                        self.substation_data[id] = {"lat": None, "long": None, "next_angle": next_angle, "started_w_coords": False}
-                        next_angle += self.placement_angle
-                        next_angle %= 360
-                        continue
-
-                    # get coordinates
-                    lat = float(coords[1])
-                    long = float(coords[2])
-                    located_substations_ids.append(id)
-                    located_substations_lat.append(lat)
-                    located_substations_long.append(long)
-
-                    # give substations different angles for connecting substations w/o coordinates
-                    self.substation_data[id] = {"lat": lat, "long": long, "next_angle": next_angle, "started_w_coords": True}
-                    next_angle += self.placement_angle
-                    next_angle %= 360
-
+                sub_lats = []
+                sub_longs = []
+                try:
+                    for sub in f_data["Substation"]:
+                        self.substation_data[int(sub["Number"])] = {
+                            "name" : sub["Name"],
+                            "lat" : float(sub["Latitude"]),
+                            "long" : float(sub["Longitude"])}
+                        sub_lats.append(float(sub["Latitude"]))
+                        sub_longs.append(float(sub["Longitude"]))
+                except KeyError:
+                    messagebox.showerror("file load error", "Substation data missing")
+                    return
+                
                 # load limits into state
-                self.min_long = min(located_substations_long)
-                self.min_lat = min(located_substations_lat)
-                self.max_long = max(located_substations_long)
-                self.max_lat = max(located_substations_lat)
+                self.min_long = min(sub_longs)
+                self.min_lat = min(sub_lats)
+                self.max_long = max(sub_longs)
+                self.max_lat = max(sub_lats)
 
                 # get bus data
-                bus_fdata = fdata[19][11:-1]
-
-                # load buses into state
                 self.bus_data = {}
-                for item in bus_fdata:
-                    id = int(item[0])
-                    sub_num = int((item[2].split())[8])
-                    self.bus_data[id] = {"sub_num" : sub_num}
-
-                # get branch data
-                branch_fdata = fdata[23][12:-1]
-
-                # load branches into state
+                try:
+                    for bus in f_data["Bus"]:
+                        self.bus_data[int(bus["Number"])] = {
+                            "name" : bus["Name"],
+                            "sub_num" : int(bus["SubNumber"])
+                        }
+                except KeyError:
+                    messagebox.showerror("file load error", "Bus data missing")
+                    return
+                
+                # get line and transformer data
                 self.branch_data = {}
-                for item in branch_fdata:
-                    ids = item[0].split()
-                    self.branch_data[(int(ids[0]), int(ids[1]))] = {"has_trans" : False}
-
-                # get transformer data
-                trans_fdata = fdata[24][9:-1]
-
-                # load transformers into state
-                for item in trans_fdata:
-                    ids = item[0].split()
-                    self.branch_data[(int(ids[0]), int(ids[1]))]["has_trans"] = True
-
-                # get branches between substations
-                branches_btwn_subs = self.get_branches_btwn_subs()
-
-                # add located substations to overlap checking structure before doing locating
-                for i in range(len(located_substations_ids)):
-                    x_val = self.long_to_x(located_substations_long[i])
-                    y_val = self.lat_to_y(located_substations_lat[i])
-                    self.check_and_update_substation_pixels(located_substations_ids[i], x_val, y_val)
-
-                # loop through branches until all substations have locations
-                shift_count = 0
-                ultrashift_count = 0
-                while(len(branches_btwn_subs) != 0):
-                    still_unlocated = []
-                    for i in range(len(branches_btwn_subs)):
-                        # get data from state
-                        ids = branches_btwn_subs[i]
-                        from_sub = self.substation_data[ids[0]]
-                        to_sub = self.substation_data[ids[1]]
-
-                        # get latitudes to determine if each sub has a location defined or not
-                        from_sub_lat = from_sub["lat"]
-                        to_sub_lat = to_sub["lat"]
-
-                        # completely ignore branches where both subs have locations
-                        if(from_sub_lat != None and to_sub_lat):
-                            continue
-
-                        # if both subs have no location, skip for now and pick up in later iteration
-                        if(from_sub_lat == None and to_sub_lat == None):
-                            still_unlocated.append(ids)
-                            continue
-
-                        # if only one sub has a location, use its location to generate a location for the other
-                        else:
-                            if(from_sub_lat != None and to_sub_lat == None):
-                                diagnostics = self.generate_sub_location(from_sub, to_sub, ids[1])
-                                shift_count += diagnostics[0]
-                                ultrashift_count += diagnostics[1]
-                            elif(from_sub_lat == None and to_sub_lat != None):
-                                diagnostics = self.generate_sub_location(to_sub, from_sub, ids[0])
-                                shift_count += diagnostics[0]
-                                ultrashift_count += diagnostics[1]
-
-                    # recurse
-                    branches_btwn_subs = still_unlocated
-
-                self.core.log_to_file("GUI", "Shift count: " + str(shift_count))
-                self.core.log_to_file("GUI", "Ultrashift count: " + str(ultrashift_count))
-
-                # check if a substation failed to be located
-                lost_count = 0
-                for item in self.substation_data:
-                    if(self.substation_data[item]["lat"] == None):
-                        lost_count += 1
-
-                self.core.log_to_file("GUI", "Lost count: " + str(lost_count))
+                try:
+                    for line in f_data["Line"]:
+                        self.branch_data[(int(line["BusNumFrom"]), int(line["BusNumTo"]), int(line["Circuit"]))] = {
+                            "has_trans" : False
+                        }
+                except KeyError:
+                    messagebox.showerror("file load error", "Transformer data missing")
+                    return
+                
+                try:
+                    for trans in f_data["Transformer"]:
+                        self.branch_data[(int(trans["BusNumFrom"]), int(trans["BusNumTo"]), int(trans["Circuit"]))] = {
+                            "has_trans" : True
+                        }
+                except KeyError:
+                    messagebox.showerror("file load error", "Transformer data missing")
+                    return
 
                 self.grid_name = grid_file.name[:-4]
 
-                self.core.load_grid_data(self.grid_name, self.substation_data, self.bus_data, self.branch_data)
+                self.core.save_grid_data(self.grid_name, self.substation_data, self.bus_data, self.branch_data)
 
                 # reset grid size back to user-defined value before displaying
                 self.grid_canvas_size = int(self.zoom_val.get()[:-1]) * 0.01 * 10000
@@ -649,6 +688,8 @@ class App(tk.Tk):
     ########################
     # Simulation Functions #
     ########################
+
+    # TODO: fix simulation functionality
 
     # https://pythonguides.com/python-tkinter-colors/
     def rgb_hack(self, rgb):
@@ -848,7 +889,7 @@ class App(tk.Tk):
 
             # filter branches within substations
             if(from_sub_num != to_sub_num):
-                branches_btwn_subs.append([from_sub_num, to_sub_num, ids[0], ids[1]])
+                branches_btwn_subs.append([from_sub_num, to_sub_num, ids[0], ids[1], ids[2]])
 
         return branches_btwn_subs
     
@@ -898,23 +939,23 @@ class App(tk.Tk):
 
         # connect bus squares at corners
         if from_x_val < to_x_val and from_y_val < to_y_val:
-            return self.grid_canvas.create_line(from_x_val + self.sq_size, from_y_val + self.sq_size, to_x_val, to_y_val, fill="red", width=2)
+            return self.grid_canvas.create_line(from_x_val + self.sq_size, from_y_val + self.sq_size, to_x_val, to_y_val, fill="blue", width=2)
         elif from_x_val > to_x_val and from_y_val > to_y_val:
-            return self.grid_canvas.create_line(from_x_val, from_y_val, to_x_val + self.sq_size, to_y_val + self.sq_size, fill="red", width=2)
+            return self.grid_canvas.create_line(from_x_val, from_y_val, to_x_val + self.sq_size, to_y_val + self.sq_size, fill="blue", width=2)
         elif from_x_val < to_x_val and from_y_val > to_y_val:
-            return self.grid_canvas.create_line(from_x_val + self.sq_size, from_y_val, to_x_val, to_y_val + self.sq_size, fill="red", width=2)
+            return self.grid_canvas.create_line(from_x_val + self.sq_size, from_y_val, to_x_val, to_y_val + self.sq_size, fill="blue", width=2)
         elif from_x_val > to_x_val and from_y_val < to_y_val:
-            return self.grid_canvas.create_line(from_x_val, from_y_val + self.sq_size, to_x_val + self.sq_size, to_y_val, fill="red", width=2)
+            return self.grid_canvas.create_line(from_x_val, from_y_val + self.sq_size, to_x_val + self.sq_size, to_y_val, fill="blue", width=2)
         
         # connect bus squares at sides if on the same axis
         elif from_x_val == to_x_val and from_y_val < to_y_val:
-            return self.grid_canvas.create_line(from_x_val + (self.sq_size / 2), from_y_val + self.sq_size, to_x_val + (self.sq_size / 2), to_y_val, fill="red", width=2)
+            return self.grid_canvas.create_line(from_x_val + (self.sq_size / 2), from_y_val + self.sq_size, to_x_val + (self.sq_size / 2), to_y_val, fill="blue", width=2)
         elif from_x_val == to_x_val and from_y_val > to_y_val:
-            return self.grid_canvas.create_line(from_x_val + (self.sq_size / 2), from_y_val, to_x_val + (self.sq_size / 2), to_y_val + self.sq_size, fill="red", width=2)
+            return self.grid_canvas.create_line(from_x_val + (self.sq_size / 2), from_y_val, to_x_val + (self.sq_size / 2), to_y_val + self.sq_size, fill="blue", width=2)
         elif from_x_val < to_x_val and from_y_val == to_y_val:
-            return self.grid_canvas.create_line(from_x_val + self.sq_size, from_y_val + (self.sq_size / 2), to_x_val, to_y_val + (self.sq_size / 2), fill="red", width=2)
+            return self.grid_canvas.create_line(from_x_val + self.sq_size, from_y_val + (self.sq_size / 2), to_x_val, to_y_val + (self.sq_size / 2), fill="blue", width=2)
         elif from_x_val > to_x_val and from_y_val == to_y_val:
-            return self.grid_canvas.create_line(from_x_val, from_y_val + (self.sq_size / 2), to_x_val + self.sq_size, to_y_val + (self.sq_size / 2), fill="red", width=2)
+            return self.grid_canvas.create_line(from_x_val, from_y_val + (self.sq_size / 2), to_x_val + self.sq_size, to_y_val + (self.sq_size / 2), fill="blue", width=2)
         
         else:
             self.core.log_to_file("GUI", "Strange values in place wire: " + str(from_x_val) + " " + str(to_x_val) + " "
@@ -993,7 +1034,7 @@ class App(tk.Tk):
             line_id = self.place_wire(from_sub_long, from_sub_lat, to_sub_long, to_sub_lat)
 
             # store lines in state so they can be colored during simulation
-            self.branch_data[(ids[2], ids[3])]["line_id"] = line_id
+            self.branch_data[(ids[2], ids[3], ids[4])]["line_id"] = line_id
 
         # clear grid mapping state
         self.substation_pixels = {}
@@ -1049,7 +1090,3 @@ class App(tk.Tk):
 
         # draw grid labels
         self.generate_axial_labels()
-
-if __name__ == "__main__":
-    app = App()
-    app.mainloop()
