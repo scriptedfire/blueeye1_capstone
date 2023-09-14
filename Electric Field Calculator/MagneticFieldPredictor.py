@@ -374,7 +374,7 @@ def calculateBField(t: np.array, N: np.array, V: np.array, Bxgsm: np.array, Bygs
 
 
 
-def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_longitude: float, min_latitude:float, max_latitude:float, granularity:float) -> pd.DataFrame:
+def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_longitude: float, min_latitude:float, max_latitude:float) -> pd.DataFrame:
     """ Take in strom data in a pandas dataframe each column will be a different data type. The rows will be time points
         @param: storm_data: Multiindex pandas dataframe. First index is a time point, 
         second is longitude, third is latitude. The columns are the solar storm data
@@ -386,8 +386,8 @@ def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_l
         The above five parameters form a grid where the magnetic field vector will be calculated for each time point
         return: pandas dataframe with the total magnetic field vector (nT) at each time (sec) and location long, lat (degrees)
     """
-    longitude_vector = np.arange(min_longitude, max_longitude, granularity)
-    latitude_vector = np.arange(min_latitude, max_latitude, granularity)
+    longitude_vector = np.array([min_longitude, max_longitude]) # np.arange(min_longitude, max_longitude, granularity)
+    latitude_vector = np.array([min_latitude, max_latitude]) # np.arange(min_latitude, max_latitude, granularity)
     time_array = storm_data["time"].to_numpy(copy=True)
     
     
