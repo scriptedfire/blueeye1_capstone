@@ -3,7 +3,6 @@ from tkinter import N,S,E,W
 from tkinter import ttk
 from tkinter import filedialog as fdialog
 from tkinter import messagebox
-from math import sin, cos, radians
 from datetime import datetime, timedelta
 from threading import Thread
 from time import sleep
@@ -133,6 +132,7 @@ class App(tk.Tk):
         self.zoom_val = tk.StringVar()
         self.zoom_input = ttk.Combobox(self.body, textvariable=self.zoom_val, width=5, state="readonly")
 
+        # TODO: set initial value to present date
         # date input configuration
         self.dmonth_input.set("01")
         self.dmonth_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1,13))))
@@ -704,6 +704,8 @@ class App(tk.Tk):
         The simulation runs at a scale of roughly 1 second per minute and loops after
         it reaches an hour from start time."""
         while(self.sim_running):
+            return
+
             # update time label
             self.time_label["text"] = "Time In Simulation: " + self.sim_time.strftime("%I:%M %p")
 
@@ -801,8 +803,7 @@ class App(tk.Tk):
             if(self.start_time != set_start_time or self.grid_name != self.grid_name_at_sim_start):
                 self.start_time = set_start_time
                 self.grid_name_at_sim_start = self.grid_name
-                # TODO: Replace with calculate function
-                core_event = self.core.send_request(self.core.fabricate_hour_of_data, {
+                core_event = self.core.send_request(self.core.calculate_simulation, {
                     "grid_name" : self.grid_name, "start_time" : self.start_time
                 })
                 core_event.wait()
