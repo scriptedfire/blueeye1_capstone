@@ -580,7 +580,13 @@ class App(tk.Tk):
 
                 self.grid_name = grid_file.name[:-4]
 
-                self.core.save_grid_data(self.grid_name, self.substation_data, self.bus_data, self.branch_data)
+                # save grid data in database
+                core_event = self.core.send_request(self.core.save_grid_data, {
+                    "grid_name" : self.grid_name, "substation_data" : self.substation_data,
+                    "bus_data" : self.bus_data, "branch_data" : self.branch_data
+                })
+
+                core_event.wait()
 
                 # reset grid size back to user-defined value before displaying
                 self.grid_canvas_size = int(self.zoom_val.get()[:-1]) * 0.01 * 10000
@@ -699,14 +705,12 @@ class App(tk.Tk):
         """Loop that runs in a thread and carries out simulation playback.
         The simulation runs at a scale of roughly 1 second per minute and loops after
         it reaches an hour from start time."""
-        local_core = Core()
-        local_core.log_to_file("GUI", "Local Core Online")
         while(self.sim_running):
             # update time label
             self.time_label["text"] = "Time In Simulation: " + self.sim_time.strftime("%I:%M %p")
 
             # load data for minute
-            time_data = local_core.get_data_for_time(self.grid_name, self.sim_time)
+            time_data = self.core.get_data_for_time(self.grid_name, self.sim_time)
 
             gics = []
             for point in time_data:
@@ -797,9 +801,6 @@ class App(tk.Tk):
                 self.core.create_hour_of_data(self.grid_name, self.start_time)
                 messagebox.showinfo("Loaded!", "Simulation has been loaded!")
 
-            # close database here so sim thread can connect
-            self.core.close_conns()
-
             # start simulation loop
             self.sim_running = True
             self.sim_thread = Thread(target=self.simulation_loop)
@@ -808,9 +809,6 @@ class App(tk.Tk):
             # kill simulation loop
             self.sim_running = False
             self.sim_thread.join(0.5)
-
-            # reopen database
-            self.core.reopen_conns()
 
             # unlock inputs
             self.dmonth_input.state(["!disabled"])
@@ -826,7 +824,8 @@ class App(tk.Tk):
             self.sim_running = False
             self.sim_thread.join(0.5)
 
-        self.destroy()
+        self.quit()
+        self.core.send_request(self.core.close_application)
 
     ########################
     # Conversion Functions #

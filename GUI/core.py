@@ -6,8 +6,11 @@ from time import time
 from GUI import App
 
 class Core():
-    # Object for GUI subsystem
+    # Variables for GUI subsystem
     app = None
+    app_thread = None
+
+    # Variables for communication between threads
     requests_sem = None
     requests_queue = []
 
@@ -24,23 +27,38 @@ class Core():
 
         self.log_to_file("Core", "Core Initialized")
 
-    def send_request(self, command, params, callback):
+    def send_request(self, func, params = None, retval = None):
         request_event = Event()
-        request = {"event" : request_event, "command" : command,
-                   "params" : params, "callback" : callback}
+        request = {"event" : request_event, "func" : func,
+                   "params" : params, "retval" : retval}
         self.requests_queue.append(request)
         self.requests_sem.release()
         return request_event
-    
-    # TODO: request eating loop
 
     #####################
     # Startup Functions #
     #####################
 
+    def start_request_loop(self):
+        while(True):
+            self.requests_sem.acquire()
+
+            # fulfill request
+            request = self.requests_queue.pop(0)
+            request["retval"] = request["func"](request["params"])
+            request["event"].set()
+
     def start_gui(self):
         self.app = App(self)
         self.app.mainloop()
+
+    def start_app_thread(self):
+        self.app_thread = Thread(target=self.start_gui)
+        self.app_thread.start()
+
+    def run_core(self):
+        self.start_app_thread()
+        self.start_request_loop()
 
     #######################
     # Grid Data Functions #
@@ -157,7 +175,12 @@ class Core():
 
         transaction.close()
 
-    def save_grid_data(self, grid_name, substation_data, bus_data, branch_data):
+    def save_grid_data(self, params):
+        grid_name = params["grid_name"]
+        substation_data = params["substation_data"]
+        bus_data = params["bus_data"]
+        branch_data = params["branch_data"]
+
         start = time()
 
         self.initialize_tables()
@@ -256,20 +279,9 @@ class Core():
     def save_to_file(self):
         self.db_conn.backup(self.backup_db_conn)
 
-    # TODO: Remove the following?
-    
-    def close_conns(self):
-        self.backup_db_conn.close()
-        self.db_conn.close()
-
-    def reopen_conns(self):
-        # initialize in memory and on file db
-        self.db_conn = sqlite3.connect(":memory:")
-        self.backup_db_conn = sqlite3.connect("state.db")
-
-        # load on file db into memory
-        self.backup_db_conn.backup(self.db_conn)
+    def close_application(self, _):
+        exit()
 
 if __name__ == "__main__":
     core = Core()
-    core.start_gui()
+    core.run_core()
