@@ -695,8 +695,6 @@ class App(tk.Tk):
     # Simulation Functions #
     ########################
 
-    # TODO: fix simulation functionality
-
     # https://pythonguides.com/python-tkinter-colors/
     def rgb_hack(self, rgb):
         return "#%02x%02x%02x" % rgb  
@@ -710,11 +708,16 @@ class App(tk.Tk):
             self.time_label["text"] = "Time In Simulation: " + self.sim_time.strftime("%I:%M %p")
 
             # load data for minute
-            time_data = self.core.get_data_for_time(self.grid_name, self.sim_time)
+            retval = []
+            core_event = self.core.send_request(self.core.get_data_for_time, {
+                "grid_name" : self.grid_name, "timepoint" : self.sim_time
+            }, retval)
+            core_event.wait()
+            time_data = retval[0]
 
             gics = []
             for point in time_data:
-                gics.append(point[4])
+                gics.append(point[5])
 
             max_gic = max(gics)
             min_gic = min(gics)
@@ -723,11 +726,11 @@ class App(tk.Tk):
                 # update all branch colors
                 for point in time_data:
                     try:
-                        branch_ids = (point[0], point[1])
+                        branch_ids = (point[0], point[1], point[2])
                         branch = self.branch_data[branch_ids]
                         try:
                             line_id = branch["line_id"]
-                            gic = point[4]
+                            gic = point[5]
 
                             # normalize gic
                             normalized = (gic - min_gic) / (max_gic - min_gic)
@@ -744,13 +747,13 @@ class App(tk.Tk):
                 try:
                     branches = self.get_branches_for_bus(self.bus_view_bus_num)
                     for point in time_data:
-                        branch_ids = (point[0], point[1])
+                        branch_ids = (point[0], point[1], point[2])
                         if(branch_ids in branches):
                             labels = self.branch_display_vals[branch_ids]
-                            labels["GIC_label"]["text"] = "GIC: " + str(point[4])
+                            labels["GIC_label"]["text"] = "GIC: " + str(point[5])
                             if(self.branch_data[branch_ids]["has_trans"]):
-                                labels["VLEVEL_label"]["text"] = "VLEVEL: " + str(point[5])
-                                labels["TTC_label"]["text"] = "TTC: " + str(point[6])
+                                labels["VLEVEL_label"]["text"] = "VLEVEL: " + str(point[6])
+                                labels["TTC_label"]["text"] = "TTC: " + str(point[7])
                 except:
                     continue
 
@@ -798,7 +801,11 @@ class App(tk.Tk):
             if(self.start_time != set_start_time or self.grid_name != self.grid_name_at_sim_start):
                 self.start_time = set_start_time
                 self.grid_name_at_sim_start = self.grid_name
-                self.core.create_hour_of_data(self.grid_name, self.start_time)
+                # TODO: Replace with calculate function
+                core_event = self.core.send_request(self.core.fabricate_hour_of_data, {
+                    "grid_name" : self.grid_name, "start_time" : self.start_time
+                })
+                core_event.wait()
                 messagebox.showinfo("Loaded!", "Simulation has been loaded!")
 
             # start simulation loop
