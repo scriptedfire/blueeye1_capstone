@@ -179,7 +179,7 @@ def data_scraper(start_date:str, file:object, file_path:str = None) -> [pd.DataF
         return: pandas data from with the storm data including the dst index.
     """
     
-    start_date = parser.parse(start_date).timestamp()
+    start_date = start_date.timestamp()
     count = 0
     max_attempts = 1000
     error = 'no error'

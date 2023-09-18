@@ -1,9 +1,12 @@
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import timedelta
 from threading import Thread, Semaphore, Event
 from random import randrange
 from time import time
+import pandas as pd
 from GUI import App
+from NOAASolarStormDataMiner import data_scraper
+from ElectricFieldPredictor import ElectricFieldCalculator
 
 class Core():
     # Variables for GUI subsystem
@@ -228,6 +231,30 @@ class Core():
         transaction.close()
 
         return data
+    
+    def calculate_simulation(self, params):
+        grid_name = params["grid_name"]
+        start_time = params["start_time"]
+
+        # TODO: ensure local time is converted to UTC
+        # get space weather data from NOAA
+        results = None
+        with open("log.txt", "a+") as logfile:
+            results = data_scraper(start_time, logfile, ".")
+
+        storm_data = results[0]
+        success_val = results[1]
+
+        # TODO: return error here if error from data scraper
+
+        # Calculate E field values
+        resistivity_data = pd.read_csv('Application/Quebec_1D_model.csv')
+        E_field = None
+        with open("log.txt", "a+") as logfile:
+            E_field = ElectricFieldCalculator(resistivity_data, storm_data, self.app.min_long, self.app.max_long,
+                                              self.app.min_lat, self.app.max_lat, logfile)
+
+        print(E_field)
 
     def fabricate_hour_of_data(self, params):
         grid_name = params["grid_name"]
