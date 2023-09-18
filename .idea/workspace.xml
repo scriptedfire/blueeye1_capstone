@@ -4,10 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="8ecf9fc9-a430-4060-8126-d6a302a7f78b" name="Changes" comment="Error exception code added">
+    <list default="true" id="8ecf9fc9-a430-4060-8126-d6a302a7f78b" name="Changes" comment="Retesting">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/3002009001 EPRI Transformer Thermal Assessment #1 (1).pdf" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/EPRI thermal models.pdf" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC_log.txt" beforeDir="false" afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC_log.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/TTC_log.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/TTC_log.txt" beforeDir="false" afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/TTC_log.txt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -28,22 +30,22 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ASKED_ADD_EXTERNAL_FILES": "true",
-    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "RunOnceActivity.OpenProjectViewOnStart": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "last_opened_file_path": "/Users/madelineburrows/Documents/GitHub/blueeye1_capstone/GIC and TTC/GIC Solver and TTC"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_ADD_EXTERNAL_FILES&quot;: &quot;true&quot;,
+    &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/madelineburrows/Documents/GitHub/blueeye1_capstone/GIC and TTC/GIC Solver and TTC&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC" />
       <recent name="$PROJECT_DIR$/GIC and TTC" />
     </key>
   </component>
-  <component name="RunManager">
+  <component name="RunManager" selected="Python.GIC Solver">
     <configuration name="GIC Solver" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
       <module name="blueeye1_capstone" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -147,7 +149,21 @@
       <option name="project" value="LOCAL" />
       <updated>1682717652417</updated>
     </task>
-    <option name="localTasksCounter" value="8" />
+    <task id="LOCAL-00008" summary="Retesting">
+      <created>1682726144413</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1682726144413</updated>
+    </task>
+    <task id="LOCAL-00009" summary="Retesting">
+      <created>1682726212481</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1682726212482</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -167,6 +183,7 @@
     <MESSAGE value="Log files added" />
     <MESSAGE value="updated csv files read path" />
     <MESSAGE value="Error exception code added" />
-    <option name="LAST_COMMIT_MESSAGE" value="Error exception code added" />
+    <MESSAGE value="Retesting" />
+    <option name="LAST_COMMIT_MESSAGE" value="Retesting" />
   </component>
 </project>
