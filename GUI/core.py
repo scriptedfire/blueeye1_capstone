@@ -27,7 +27,7 @@ class Core():
 
         self.log_to_file("Core", "Core Initialized")
 
-    def send_request(self, func, params = None, retval = None):
+    def send_request(self, func, params = None, retval = []):
         request_event = Event()
         request = {"event" : request_event, "func" : func,
                    "params" : params, "retval" : retval}
@@ -45,7 +45,7 @@ class Core():
 
             # fulfill request
             request = self.requests_queue.pop(0)
-            request["retval"] = request["func"](request["params"])
+            request["retval"].append(request["func"](request["params"]))
             request["event"].set()
 
     def start_gui(self):
