@@ -27,14 +27,6 @@ class Core():
 
         self.log_to_file("Core", "Core Initialized")
 
-    def send_request(self, func, params = None, retval = []):
-        request_event = Event()
-        request = {"event" : request_event, "func" : func,
-                   "params" : params, "retval" : retval}
-        self.requests_queue.append(request)
-        self.requests_sem.release()
-        return request_event
-
     #####################
     # Startup Functions #
     #####################
@@ -60,9 +52,9 @@ class Core():
         self.start_app_thread()
         self.start_request_loop()
 
-    #######################
-    # Grid Data Functions #
-    #######################
+    ###########################
+    # Internal Data Functions #
+    ###########################
 
     def initialize_tables(self):
         transaction = self.db_conn.cursor()
@@ -169,11 +161,18 @@ class Core():
 
         # load branch entity into db
         transaction.execute("""INSERT INTO Branch(FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME, HAS_TRANSFORMER)
-        VALUES(?,?,?,?,?)""", [from_bus, to_bus, grid_name, circuit, has_trans])
+        VALUES(?,?,?,?,?)""", [from_bus, to_bus, circuit, grid_name, has_trans])
 
         self.db_conn.commit()
 
         transaction.close()
+    
+    def save_to_file(self):
+        self.db_conn.backup(self.backup_db_conn)
+
+    #########################
+    # Requestable Functions #
+    #########################
 
     def save_grid_data(self, params):
         grid_name = params["grid_name"]
@@ -216,16 +215,24 @@ class Core():
 
         self.log_to_file("Core", "Loading Grid Took: " + str(time() - start) + " seconds")
 
-    ###################
-    # Misc. Functions #
-    ###################
+    def get_data_for_time(self, params):
+        grid_name = params["grid_name"]
+        timepoint = params["timepoint"]
 
-    def log_to_file(self, source, msg):
-        with open("log.txt", "a+") as logfile:
-            logfile.write("From " + source + ": " + msg + "\n")
+        transaction = self.db_conn.cursor()
 
-    # TODO: fix or remove
-    def create_hour_of_data(self, grid_name, start_time):
+        transaction.execute("""SELECT * FROM Datapoint WHERE GRID_NAME=? AND DPOINT_TIME=?""", (grid_name, timepoint.strftime("%m/%d/%Y, %H:%M:%S")))
+
+        data = transaction.fetchall()
+
+        transaction.close()
+
+        return data
+
+    def fabricate_hour_of_data(self, params):
+        grid_name = params["grid_name"]
+        start_time = params["start_time"]
+
         transaction = self.db_conn.cursor()
 
         # get buses
@@ -244,7 +251,9 @@ class Core():
             for branch in branches:
                 from_bus = branch[0]
                 to_bus = branch[1]
-                has_trans = branch[3]
+                circuit = branch[2]
+
+                has_trans = branch[4]
                 gic = randrange(0, 999)
                 vlevel = None
                 ttc = None
@@ -253,9 +262,9 @@ class Core():
                     vlevel = randrange(0, 999)
                     ttc = randrange(0, 999)
 
-                transaction.execute("""INSERT INTO Datapoint(FROM_BUS, TO_BUS, GRID_NAME,
-                DPOINT_TIME, DPOINT_GIC, DPOINT_VLEVEL, DPOINT_TTC) VALUES(?,?,?,?,?,?,?)""",
-                [from_bus, to_bus, grid_name, dpoint_time, gic, vlevel, ttc])
+                transaction.execute("""INSERT INTO Datapoint(FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME,
+                DPOINT_TIME, DPOINT_GIC, DPOINT_VLEVEL, DPOINT_TTC) VALUES(?,?,?,?,?,?,?,?)""",
+                [from_bus, to_bus, circuit, grid_name, dpoint_time, gic, vlevel, ttc])
 
                 self.db_conn.commit()
 
@@ -265,22 +274,24 @@ class Core():
 
         self.save_to_file()
 
-    def get_data_for_time(self, grid_name, timepoint):
-        transaction = self.db_conn.cursor()
-
-        transaction.execute("""SELECT * FROM Datapoint WHERE GRID_NAME=? AND DPOINT_TIME=?""", (grid_name, timepoint.strftime("%m/%d/%Y, %H:%M:%S")))
-
-        data = transaction.fetchall()
-
-        transaction.close()
-
-        return data
-    
-    def save_to_file(self):
-        self.db_conn.backup(self.backup_db_conn)
-
     def close_application(self, _):
         exit()
+
+    ###################
+    # Misc. Functions #
+    ###################
+
+    def send_request(self, func, params = None, retval = []):
+        request_event = Event()
+        request = {"event" : request_event, "func" : func,
+                   "params" : params, "retval" : retval}
+        self.requests_queue.append(request)
+        self.requests_sem.release()
+        return request_event
+
+    def log_to_file(self, source, msg):
+        with open("log.txt", "a+") as logfile:
+            logfile.write("From " + source + ": " + msg + "\n")
 
 if __name__ == "__main__":
     core = Core()
