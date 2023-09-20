@@ -14,11 +14,8 @@ class App(tk.Tk):
     # state from user input: canvas size for scaling lat/long
     grid_canvas_size = 1000
 
-    # constant: angle between sub branches placed from a given sub
-    placement_angle = 15
-
-    # constant: toss distance percent for approximating sub locations that don't have coords
-    toss_percent = 0.02
+    # how many branches to display per row in bus view
+    branches_per_row = 4
 
     # state from file: values for lat/long to canvas x/y conversion
     max_lat = 0
@@ -85,7 +82,7 @@ class App(tk.Tk):
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
 
-        # set up closing function for killing sim on the way out
+        # set up on closing function so that program exits correctly
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         self.create_body_frame()
@@ -235,7 +232,9 @@ class App(tk.Tk):
         self.bus_btn_sets = []
         for sub_num in sub_nums:
             # create label for substations
-            sub_label = ttk.Label(self.sub_frame, text="Substation " + str(sub_num) + ":")
+            sub_name = self.substation_data[sub_num]["name"]
+            sub_label_text = "Substation " + (sub_name if not(sub_name == "") else str(sub_num)) + ":"
+            sub_label = ttk.Label(self.sub_frame, text=sub_label_text)
             sub_label.grid(column=0, row=current_row, sticky=(N,W), pady=8)
             self.sub_labels.append(sub_label)
             current_row += 1
@@ -250,7 +249,9 @@ class App(tk.Tk):
             buses = self.get_buses_for_sub(sub_num)
             bus_btns = []
             for bus_num in buses:
-                bus_btn = ttk.Button(bus_btn_frame, text="Bus " + str(bus_num), command=self.bus_btn_click(sub_nums, bus_num))
+                bus_name = self.bus_data[bus_num]["name"]
+                bus_btn_text = "Bus " + (bus_name if not(bus_name == "") else str(bus_num))
+                bus_btn = ttk.Button(bus_btn_frame, text=bus_btn_text, command=self.bus_btn_click(sub_nums, bus_num))
                 bus_btn.grid(column=current_column, row=current_row)
                 bus_btns.append(bus_btn)
                 current_column += 1
@@ -283,7 +284,9 @@ class App(tk.Tk):
                 to_buses.append(branch[1])
 
         # create bus label
-        self.bus_label = ttk.Label(self.body, text="Bus " + str(bus_num) + ":")
+        bus_name = self.bus_data[bus_num]["name"]
+        bus_label_text = bus_name if not(bus_name == "") else str(bus_num)
+        self.bus_label = ttk.Label(self.body, text="Bus " + bus_label_text + ":")
         self.bus_label.grid(column=0, row=1, sticky=(N,W), padx=4, pady=8)
 
         # create bus frame
@@ -292,11 +295,24 @@ class App(tk.Tk):
 
         self.branch_display_vals = {}
         current_column = 0
+        row_base = 2
         for i in range(len(branches)):
-            current_row = 2
+            # go to a new row after a given number of branches and reset column
+            current_row = row_base + (5 * (i // self.branches_per_row))
+            if((i % self.branches_per_row) == 0):
+                current_column = 0
+
+            # get bus label
+            bus_name = self.bus_data[to_buses[i]]["name"]
+            bus_label_text = bus_name if not(bus_name == "") else str(to_buses[i])
+
+            # get sub label
+            sub_num = self.bus_data[to_buses[i]]["sub_num"]
+            sub_name = self.substation_data[sub_num]["name"]
+            sub_label_text = sub_name if not(sub_name == "") else str(sub_num)
 
             # create branch label
-            branch_label = ttk.Label(self.bus_frame, text="To Bus " + str(to_buses[i]) + " at Sub " + str(self.bus_data[to_buses[i]]["sub_num"]) + ":")
+            branch_label = ttk.Label(self.bus_frame, text="To Bus " + bus_label_text + " at Sub " + sub_label_text + ":")
             branch_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
             self.branch_display_vals[branches[i]] = {"branch_label":branch_label}
             current_row += 1
@@ -920,7 +936,7 @@ class App(tk.Tk):
     # Grid Drawing Functions #
     ##########################
 
-    def place_sub(self, long, lat, sub_num):
+    def place_sub(self, long, lat, sub_num, sub_name):
         # convert lat/long to x/y
         x_val = self.long_to_x(long)
         y_val = self.lat_to_y(lat)
@@ -933,7 +949,8 @@ class App(tk.Tk):
         self.grid_canvas.tag_bind(rect_id, "<Button-1>", self.grid_canvas_sub_click(sub_num))
         
         # place sub text
-        self.grid_canvas.create_text(x_val + (self.sq_size / 2), y_val + (self.sq_size * 3), text='S' + str(sub_num), anchor='center', font=("Helvetica", 8), fill='black')
+        self.grid_canvas.create_text(x_val + (self.sq_size / 2), y_val + (self.sq_size * 3), text=sub_name if not(sub_name == "") else 'S' + str(sub_num), 
+        anchor='center', font=("Helvetica", 8), fill='black')
 
         return rect_id
 
@@ -1050,7 +1067,7 @@ class App(tk.Tk):
         # draw all substations
         for i in self.substation_data:
             sub_to_place = self.substation_data[i]
-            self.place_sub(sub_to_place["long"], sub_to_place["lat"], i)
+            self.place_sub(sub_to_place["long"], sub_to_place["lat"], i, sub_to_place["name"])
 
         # get overlapped substations
         for i in self.substation_pixels:
