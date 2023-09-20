@@ -5,11 +5,23 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="8ecf9fc9-a430-4060-8126-d6a302a7f78b" name="Changes" comment="Retesting">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/3002009001 EPRI Transformer Thermal Assessment #1 (1).pdf" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/EPRI thermal models.pdf" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC_log.txt" beforeDir="false" afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC_log.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/TTC_log.txt" beforeDir="false" afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/TTC_log.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver and TTC/.idea/.gitignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver and TTC/.idea/403_Blue_Eye_1.iml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver and TTC/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver and TTC/.idea/misc.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver and TTC/.idea/modules.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver and TTC/CSV Test.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver and TTC/GIC Solver.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver and TTC/GIC_log.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver and TTC/TTC_log.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver and TTC/Transformer Thermal Capacity.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver and TTC/TransformerCurrents.csv" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver and TTC/TransmissionLineGIC.csv" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver and TTC/dict_searching_method_tester.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver and TTC/make3DPandas.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver and TTC/requirements.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver and TTC/total_heatup.csv" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC/GIC Solver and TTC/warnings_generated.csv" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -30,15 +42,16 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ASKED_ADD_EXTERNAL_FILES&quot;: &quot;true&quot;,
-    &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/madelineburrows/Documents/GitHub/blueeye1_capstone/GIC and TTC/GIC Solver and TTC&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ASKED_ADD_EXTERNAL_FILES": "true",
+    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "last_opened_file_path": "/Users/madelineburrows/Documents/GitHub/blueeye1_capstone/GIC and TTC/GIC Solver and TTC"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/GIC and TTC/GIC Solver and TTC" />
