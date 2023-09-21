@@ -1,9 +1,11 @@
 import sqlite3
-from datetime import timedelta
+import datetime
+from datetime import timedelta, timezone
 from threading import Thread, Semaphore, Event
 from random import randrange
 from time import time
 import pandas as pd
+from time import sleep
 from GUI import App
 from NOAASolarStormDataMiner import data_scraper
 from ElectricFieldPredictor import ElectricFieldCalculator
@@ -235,17 +237,29 @@ class Core():
     def calculate_simulation(self, params):
         grid_name = params["grid_name"]
         start_time = params["start_time"]
+        progress_sem = params["progress_sem"]
 
-        # TODO: ensure local time is converted to UTC
+        # convert start time from local to utc
+        local_timezone = datetime.datetime.now().astimezone().tzinfo
+        start_time = start_time.replace(tzinfo=local_timezone)
+        start_time = start_time.astimezone(timezone.utc)
+
+        # TODO: log start time
+
         # get space weather data from NOAA
         results = None
         with open("log.txt", "a+") as logfile:
             results = data_scraper(start_time, logfile, ".")
 
-        storm_data = results[0]
-        success_val = results[1]
+        print(results)
 
-        # TODO: return error here if error from data scraper
+        storm_data = results[0]
+        data_invalid = results[1]
+
+        if data_invalid:
+            return "Invalid data received from NOAA Storm Dataminer"
+
+        progress_sem.release()
 
         # Calculate E field values
         resistivity_data = pd.read_csv('Application/Quebec_1D_model.csv')
@@ -255,6 +269,23 @@ class Core():
                                               self.app.min_lat, self.app.max_lat, logfile)
 
         print(E_field)
+
+        progress_sem.release()
+
+        # GIC Solver
+        sleep(5)
+
+        progress_sem.release()
+
+        # TTC
+        sleep(5)
+
+        progress_sem.release()
+
+        # Store to database
+        sleep(1)
+
+        return True
 
     def fabricate_hour_of_data(self, params):
         grid_name = params["grid_name"]
