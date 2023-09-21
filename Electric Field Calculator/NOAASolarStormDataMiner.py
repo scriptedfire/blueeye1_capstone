@@ -118,8 +118,6 @@ def storm_data_dst_merge(data:pd.DataFrame, dst:pd.DataFrame) -> pd.DataFrame:
         dst_array[i] = dst['Dst'].iloc[time_slot]
     
     data['dst'] = dst_array
-    # data = data.dropna()
-    # data.reset_index(inplace=True)
     return data
 
 def check_data(data:pd.DataFrame) -> [pd.DataFrame, bool]:
