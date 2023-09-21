@@ -4,7 +4,7 @@ from tkinter import ttk
 from tkinter import filedialog as fdialog
 from tkinter import messagebox
 from datetime import datetime, timedelta
-from threading import Thread
+from threading import Thread, Semaphore
 from time import sleep
 
 class App(tk.Tk):
@@ -15,7 +15,7 @@ class App(tk.Tk):
     grid_canvas_size = 1000
 
     # how many branches to display per row in bus view
-    branches_per_row = 4
+    branches_per_row = 3
 
     # state from file: values for lat/long to canvas x/y conversion
     max_lat = 0
@@ -72,6 +72,9 @@ class App(tk.Tk):
 
     # state from running simulation: for pause/play to work if grid is switched
     grid_name_at_sim_start = ""
+
+    # state for if new simulation data is needed
+    new_sim_data_required = False
 
     def __init__(self, core):
         super().__init__()
@@ -220,6 +223,19 @@ class App(tk.Tk):
         # declare canvas as inactive
         self.grid_canvas_active = False
 
+    def create_loading_view(self):
+        self.loading_frame = ttk.Frame(self.body)
+        self.loading_frame.grid(column=5, row=1, sticky=(N,W,E,S), columnspan=15)
+        self.loading_header = ttk.Label(self.loading_frame, text="Preparing Simulation:")
+        self.loading_header.grid(column=0, row=0, columnspan=15)
+        self.loading_progress = ttk.Progressbar(self.loading_frame, orient=tk.HORIZONTAL, length=100, mode="determinate")
+        self.loading_progress.grid(column=0, row=1, columnspan=15)
+        self.loading_text = ttk.Label(self.loading_frame, text="Retrieving Storm Data from NOAA")
+        self.loading_text.grid(column=0, row=2, columnspan=15)
+
+    def destroy_loading_view(self):
+        self.loading_frame.destroy()
+
     def create_sub_view(self, sub_nums):
         # create internal sub frame
         self.sub_frame = ttk.Frame(self.body)
@@ -283,15 +299,15 @@ class App(tk.Tk):
             else:
                 to_buses.append(branch[1])
 
-        # create bus label
-        bus_name = self.bus_data[bus_num]["name"]
-        bus_label_text = bus_name if not(bus_name == "") else str(bus_num)
-        self.bus_label = ttk.Label(self.body, text="Bus " + bus_label_text + ":")
-        self.bus_label.grid(column=0, row=1, sticky=(N,W), padx=4, pady=8)
-
         # create bus frame
         self.bus_frame = ttk.Frame(self.body)
         self.bus_frame.grid(column=0, row=2, sticky=(N,W), columnspan=15)
+
+        # create bus label
+        bus_name = self.bus_data[bus_num]["name"]
+        bus_label_text = bus_name if not(bus_name == "") else str(bus_num)
+        self.bus_label = ttk.Label(self.bus_frame, text="Bus " + bus_label_text + ":")
+        self.bus_label.grid(column=0, row=1, sticky=(N,W), padx=4, pady=8)
 
         self.branch_display_vals = {}
         current_column = 0
@@ -347,7 +363,6 @@ class App(tk.Tk):
         self.bus_view_active = True
 
     def destroy_bus_view(self):
-        self.bus_label.destroy()
         self.bus_frame.destroy()
         self.branch_labels = []
         self.bus_view_active = False
@@ -719,6 +734,49 @@ class App(tk.Tk):
         """Loop that runs in a thread and carries out simulation playback.
         The simulation runs at a scale of roughly 1 second per minute and loops after
         it reaches an hour from start time."""
+
+        if self.new_sim_data_required:
+            self.destroy_grid_canvas()
+            self.create_loading_view()
+            loading_sem = Semaphore(value=0)
+            retval = []
+            core_event = self.core.send_request(self.core.calculate_simulation, {
+                "grid_name" : self.grid_name, "start_time" : self.start_time,
+                "progress_sem" : loading_sem
+            }, retval)
+            for i in range(1,5):
+                if(i == 2):
+                    self.loading_text["text"] = "Calculating Electric Field"
+                elif(i == 3):
+                    self.loading_text["text"] = "Calculating GICS"
+                elif(i == 4):
+                    self.loading_text["text"] = "Calculating TTCs"
+                while not loading_sem.acquire(blocking=False):
+                    if core_event.is_set():
+                        # calculations failed
+                        messagebox.showinfo("Simulation Error", retval[0])
+                        self.destroy_loading_view()
+                        self.create_grid_canvas()
+                        self.redraw_grid()
+                        self.sim_running = False
+                        # unlock inputs
+                        self.dmonth_input.state(["!disabled"])
+                        self.dday_input.state(["!disabled"])
+                        self.dyear_input.state(["!disabled"])
+                        self.hour_input.state(["!disabled"])
+                        self.minute_input.state(["!disabled"])
+                        self.ampm_input.state(["!disabled"])
+                        self.load_btn.state(["!disabled"])
+                        self.play_btn.state(["!disabled"])
+                        return
+                self.loading_progress["value"] = i * 25
+            core_event.wait()
+            messagebox.showinfo("Loaded!", "Simulation has been loaded!")
+            # TODO: get back to canvas
+            self.new_sim_data_required = False
+
+        self.play_btn.state(["!disabled"])
+
         while(self.sim_running):
             return
 
@@ -791,6 +849,7 @@ class App(tk.Tk):
             self.minute_input.state(["disabled"])
             self.ampm_input.state(["disabled"])
             self.load_btn.state(["disabled"])
+            self.play_btn.state(["disabled"])
 
             # load date and time
             month = int(self.dmonth_val.get())
@@ -819,11 +878,7 @@ class App(tk.Tk):
             if(self.start_time != set_start_time or self.grid_name != self.grid_name_at_sim_start):
                 self.start_time = set_start_time
                 self.grid_name_at_sim_start = self.grid_name
-                core_event = self.core.send_request(self.core.calculate_simulation, {
-                    "grid_name" : self.grid_name, "start_time" : self.start_time
-                })
-                core_event.wait()
-                messagebox.showinfo("Loaded!", "Simulation has been loaded!")
+                self.new_sim_data_required = True
 
             # start simulation loop
             self.sim_running = True
