@@ -21,8 +21,6 @@ URL_STORM_DATA = r"https://services.swpc.noaa.gov/products/geospace/propagated-s
 
 URL_DST = r"https://services.swpc.noaa.gov/json/geospace/geospace_dst_7_day.json"
 
-FILE_Path = r"C:\\Users\\steph\\GitHub\\blueeye1_capstone\\Electric Field Calculator"
-
 def json_dst_to_pandas(json_object:object) -> pd.DataFrame:
     """ json object of dst data to a pandas dataframe for NOAA geospace_dst file
         @param: json_object: json file object
@@ -170,11 +168,11 @@ def check_data(data:pd.DataFrame) -> [pd.DataFrame, bool]:
     return data, is_bad         
                
 
-def data_scraper(start_date:str, file:object, file_path:str = None) -> [pd.DataFrame, bool]:
+def data_scraper(start_date:str, log_queue:object, file_path:str = None) -> [pd.DataFrame, bool]:
     """This is the function that will be called to run the data scraper
         @param: start_date: beggining date and time for which data is requested in UTC. 
         Must be more recent than 7 days and before the most distant prediction
-        @param: file: file object to append program progress (log file)
+        @param: log_queue: queue object to send log messages through
         @param: file_path: folder where the scraped data can be saved in a csv file
         return: pandas data from with the storm data including the dst index.
     """
@@ -183,7 +181,7 @@ def data_scraper(start_date:str, file:object, file_path:str = None) -> [pd.DataF
     count = 0
     max_attempts = 1000
     error = 'no error'
-    file.write('Requesting data from NOAA...\n')
+    log_queue.put('Requesting data from NOAA...\n')
     while count < max_attempts:
         try:
             r_storm_data = urllib.request.urlopen(URL_STORM_DATA)
@@ -193,9 +191,9 @@ def data_scraper(start_date:str, file:object, file_path:str = None) -> [pd.DataF
              error = str(e) + f" maximum, {max_attempts}, attemps exceeded when requesting data from NOAA"
              count += 1
     if count >= max_attempts:
-         file.write("Failed to retrieve data from NOAA after 1000 attempts.\n")
+         log_queue.put("Failed to retrieve data from NOAA after 1000 attempts.\n")
          return error
-    file.write("Data retrieved from NOAA.\nProcessing data...\n")
+    log_queue.put("Data retrieved from NOAA.\nProcessing data...\n")
     storm_data = json.load(r_storm_data)
     
     dst = json.load(r_dst_index)
@@ -219,13 +217,13 @@ def data_scraper(start_date:str, file:object, file_path:str = None) -> [pd.DataF
     
     data.reset_index(inplace=True)
     data.drop(data.columns[0], axis=1, inplace=True)
-    file.write("Data Processing complete.\n")
+    log_queue.put("Data Processing complete.\n")
     
-    file.write("Cleaning Scraped Data.\n")
+    log_queue.put("Cleaning Scraped Data.\n")
     data, is_invalid = check_data(data)
     # create file with the data if a file path is given
     if file_path:
-        file.write("Saving data to file path...\n")
+        log_queue.put("Saving data to file path...\n")
         storm_data_to_csv(data, file_path)
-        file.write("Data saved to file path.\n")
+        log_queue.put("Data saved to file path.\n")
     return data, is_invalid

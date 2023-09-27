@@ -3,8 +3,8 @@ from tkinter import N,S,E,W
 from tkinter import ttk
 from tkinter import filedialog as fdialog
 from tkinter import messagebox
-from datetime import datetime, timedelta
-from threading import Thread, Semaphore
+from datetime import datetime, timedelta, date
+from threading import Thread, Semaphore, Event
 from time import sleep
 
 class App(tk.Tk):
@@ -66,9 +66,11 @@ class App(tk.Tk):
     # state from user input: start of simulation
     start_time = None
 
-    # state from running simulation: is sim running?, current time in simulation, and sim loop object
+    # state from running simulation: is sim running?, has sim been cancelled?, current time in simulation, and sim thread object
     sim_running = False
+    sim_cancelled = False
     sim_time = datetime(1970, 1, 1, 1, 1)
+    sim_thread = None
 
     # state from running simulation: for pause/play to work if grid is switched
     grid_name_at_sim_start = ""
@@ -132,14 +134,16 @@ class App(tk.Tk):
         self.zoom_val = tk.StringVar()
         self.zoom_input = ttk.Combobox(self.body, textvariable=self.zoom_val, width=5, state="readonly")
 
-        # TODO: set initial value to present date
+        # get current date
+        date_today = date.today()
+
         # date input configuration
-        self.dmonth_input.set("01")
+        self.dmonth_input.set(str(date_today.month))
         self.dmonth_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1,13))))
         self.dmonth_input.bind('<<ComboboxSelected>>', self.set_days_for_month)
-        self.dday_input.set("01")
+        self.dday_input.set(str(date_today.day))
         self.dday_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1,32))))
-        self.dyear_input.set("2023")
+        self.dyear_input.set(str(date_today.year))
         self.dyear_input["values"] = list(map(lambda val : str(val), list(range(1970, 2038))))
         self.dyear_input.bind('<<ComboboxSelected>>', self.check_for_leap_year)
 
@@ -232,6 +236,8 @@ class App(tk.Tk):
         self.loading_progress.grid(column=0, row=1, columnspan=15)
         self.loading_text = ttk.Label(self.loading_frame, text="Retrieving Storm Data from NOAA")
         self.loading_text.grid(column=0, row=2, columnspan=15)
+        self.loading_cancel_btn = ttk.Button(self.loading_frame, text="Cancel", command=self.cancel_simulation_calculations)
+        self.loading_cancel_btn.grid(column=0, row=3, columnspan=15)
 
     def destroy_loading_view(self):
         self.loading_frame.destroy()
@@ -739,10 +745,11 @@ class App(tk.Tk):
             self.destroy_grid_canvas()
             self.create_loading_view()
             loading_sem = Semaphore(value=0)
+            terminate_event = Event()
             retval = []
             core_event = self.core.send_request(self.core.calculate_simulation, {
                 "grid_name" : self.grid_name, "start_time" : self.start_time,
-                "progress_sem" : loading_sem
+                "progress_sem" : loading_sem, "terminate_event" : terminate_event
             }, retval)
             for i in range(1,5):
                 if(i == 2):
@@ -752,6 +759,32 @@ class App(tk.Tk):
                 elif(i == 4):
                     self.loading_text["text"] = "Calculating TTCs"
                 while not loading_sem.acquire(blocking=False):
+                    if self.sim_cancelled:
+                        # calculations canceled
+                        self.sim_cancelled = False
+                        print("Attempting to terminate calculations")
+                        terminate_event.set()
+                        core_event.wait()
+                        self.destroy_loading_view()
+                        self.create_grid_canvas()
+                        self.redraw_grid()
+                        self.sim_running = False
+                        # unlock inputs
+                        self.dmonth_input.state(["!disabled"])
+                        self.dday_input.state(["!disabled"])
+                        self.dyear_input.state(["!disabled"])
+                        self.hour_input.state(["!disabled"])
+                        self.minute_input.state(["!disabled"])
+                        self.ampm_input.state(["!disabled"])
+                        self.load_btn.state(["!disabled"])
+                        self.play_btn.state(["!disabled"])
+                        return
+                    if not self.sim_running:
+                        # terminate calculations and return to grid view
+                        print("Attempting to terminate calculations")
+                        terminate_event.set()
+                        core_event.wait()
+                        return
                     if core_event.is_set():
                         # calculations failed
                         messagebox.showinfo("Simulation Error", retval[0])
@@ -770,16 +803,17 @@ class App(tk.Tk):
                         self.play_btn.state(["!disabled"])
                         return
                 self.loading_progress["value"] = i * 25
+            self.loading_text["text"] = "Saving to Database"
             core_event.wait()
             messagebox.showinfo("Loaded!", "Simulation has been loaded!")
-            # TODO: get back to canvas
+            self.destroy_loading_view()
+            self.create_grid_canvas()
+            self.redraw_grid()
             self.new_sim_data_required = False
 
         self.play_btn.state(["!disabled"])
 
         while(self.sim_running):
-            return
-
             # update time label
             self.time_label["text"] = "Time In Simulation: " + self.sim_time.strftime("%I:%M %p")
 
@@ -897,6 +931,9 @@ class App(tk.Tk):
             self.minute_input.state(["!disabled"])
             self.ampm_input.state(["!disabled"])
             self.load_btn.state(["!disabled"])
+
+    def cancel_simulation_calculations(self, *args):
+        self.sim_cancelled = True
 
     def on_closing(self):
         if(self.sim_running):
