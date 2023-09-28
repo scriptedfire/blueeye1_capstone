@@ -8,74 +8,82 @@ from threading import Thread, Semaphore, Event
 from time import sleep
 
 class App(tk.Tk):
-    # constant: display size of substation squares
+    #############
+    # Constants #
+    #############
+
+    # Constant: Display size of substation squares
     sq_size = 6
 
-    # state from user input: canvas size for scaling lat/long
-    grid_canvas_size = 1000
-
-    # how many branches to display per row in bus view
+    # Constant: How many branches to display per row in bus view
     branches_per_row = 3
 
-    # state from file: values for lat/long to canvas x/y conversion
+    #########
+    # State #
+    #########
+
+    # State from user input: Canvas size for scaling lat/long
+    grid_canvas_size = 1000
+
+    # State from file: Values for lat/long to canvas x/y conversion
     max_lat = 0
     max_long = 0
     min_lat = 0
     min_long = 0
 
-    # state from file: name of currently loaded grid
+    # State from file: Name of currently loaded grid
     grid_name = ""
 
-    # state from file: keys are substation ids
-    # vals are any data attached to a substation
+    # State from file: Keys are substation ids, and
+    # values are any data attached to a substation
     substation_data = {}
 
-    # state from file: keys are bus ids
-    # vals are any data attached to a bus
+    # State from file: Keys are bus ids, and
+    # values are any data attached to a bus
     bus_data = {}
 
-    # state from file: keys are tuples of (from_bus, to_bus)
-    # vals are any data attached to a branch
+    # State from file: Keys are tuples of (from_bus, to_bus, circuit), and
+    # values are any data attached to a branch
     branch_data = {}
 
-    # state from grid (re)drawing: keys are tuples of (x_val, y_val)
-    # vals are ids of substations touching that pixel
-    # load_file also uses this temporarily but then calls redraw_grid which restores it
-    # primarily a diagnostic tool for identifying overlapping substations
+    # State from grid (re)drawing: Keys are tuples of (x_val, y_val), and
+    # values are ids of substations touching that pixel.
+    # load_file also uses this temporarily but then calls redraw_grid which restores it.
+    # Primarily a diagnostic tool for identifying overlapping substations.
     substation_pixels = {}
 
-    # state from grid (re)drawing: keys are substation ids
-    # vals are sets of substations overlapped by the given substation
-    # used for O(1) lookup of substations under a given substation
+    # State from grid (re)drawing: Keys are substation ids, and
+    # values are sets of substations overlapped by the given substation.
+    # Used for O(1) lookup of substations under a given substation.
     substations_overlapped_by_sub = {}
 
-    # state from user input: keeps track of if the grid canvas exists or not
+    # State from user input: Keeps track of if the grid canvas is loaded or not
     grid_canvas_active = False
 
-    # state from user input: keeps track of if the sub view exists or not
+    # State from user input: Keeps track of if the sub view is loaded or not
     sub_view_active = False
 
-    # state from user input: keeps track of if the bus view exists or not and what bus it's on
+    # State from user input: Keeps track of if the bus view is loaded or not and what bus it's on
     bus_view_active = False
     bus_view_bus_num = None
 
-    # state from user input: locations of the horizontal and vertical grid sliders for exiting/reentering grid view
+    # State from user input: Locations of the horizontal and vertical grid sliders for exiting/reentering grid view
     grid_canvas_saved_x = None
     grid_canvas_saved_y = None
 
-    # state from user input: start of simulation
+    # State from user input: Start time in simulation
     start_time = None
 
-    # state from running simulation: is sim running?, has sim been cancelled?, current time in simulation, and sim thread object
+    # State from running simulation: Is sim running?, has sim been cancelled?, current time in simulation, and sim thread object
     sim_running = False
     sim_cancelled = False
     sim_time = datetime(1970, 1, 1, 1, 1)
     sim_thread = None
 
-    # state from running simulation: for pause/play to work if grid is switched
+    # State from running simulation: For pause/play to work if grid is switched
     grid_name_at_sim_start = ""
 
-    # state for if new simulation data is needed
+    # State from running simulation: For if new simulation data is needed
     new_sim_data_required = False
 
     def __init__(self, core):
@@ -92,11 +100,28 @@ class App(tk.Tk):
 
         self.create_body_frame()
 
+    def on_closing(self):
+        """ This method ensures that the application closes gracefully by
+            ensuring that the simulation thread terminates, starting its own
+            closing process, and queueing the Core's close method
+        """
+        if(self.sim_running):
+            self.sim_running = False
+            self.sim_thread.join(0.5)
+
+        self.quit()
+        self.core.send_request(self.core.close_application)
+
     #####################################
     # UI Creation/Destruction Functions #
     #####################################
 
+    # - These functions are for creating and destroying sections of the UI
+    # - They facilitate initializing the UI and switching between different views
+
     def create_body_frame(self):
+        """ This method initializes the UI's body and user inputs
+        """
         self.body = ttk.Frame(self, padding="3 3 12 12")
 
         # buttons
@@ -104,7 +129,7 @@ class App(tk.Tk):
         self.play_btn = ttk.Button(self.body, text="Play/Pause Simulation", command=self.play_or_pause_sim)
         self.date_label = ttk.Label(self.body, text="Solar Storm Date:")
 
-        # enter date
+        # date input fields
         self.dmonth_val = tk.StringVar()
         self.dmonth_input = ttk.Combobox(self.body, textvariable=self.dmonth_val, width=3, state="readonly")
         self.slash1_label = ttk.Label(self.body, text="/")
@@ -114,7 +139,7 @@ class App(tk.Tk):
         self.dyear_val = tk.StringVar()
         self.dyear_input = ttk.Combobox(self.body, textvariable=self.dyear_val, width=5, state="readonly")
 
-        # enter time
+        # time input fields
         self.time_in_label = ttk.Label(self.body, text="Solar Storm Time:")
         self.hour_val = tk.StringVar()
         self.hour_input = ttk.Combobox(self.body, textvariable=self.hour_val, width=3, state="readonly")
@@ -126,10 +151,10 @@ class App(tk.Tk):
         # simulation time
         self.time_label = ttk.Label(self.body, text="Time In Simulation: XX:XX")
 
-        # button configuration
+        # play button initial state
         self.play_btn.state(["disabled"])
 
-        # enter zoom
+        # zoom input field
         self.zoom_label = tk.Label(self.body, text="Zoom: ")
         self.zoom_val = tk.StringVar()
         self.zoom_input = ttk.Combobox(self.body, textvariable=self.zoom_val, width=5, state="readonly")
@@ -137,7 +162,7 @@ class App(tk.Tk):
         # get current date
         date_today = date.today()
 
-        # date input configuration
+        # date input configuration with current date as initial value
         self.dmonth_input.set(str(date_today.month))
         self.dmonth_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1,13))))
         self.dmonth_input.bind('<<ComboboxSelected>>', self.set_days_for_month)
@@ -184,6 +209,8 @@ class App(tk.Tk):
         self.zoom_input.grid(column=14, row=0, sticky=(W,E))
 
     def create_grid_canvas(self):
+        """ This method creates the grid view, which is initially empty
+        """
         # canvas initialization
         self.h_scroll = ttk.Scrollbar(self, orient=tk.HORIZONTAL)
         self.v_scroll = ttk.Scrollbar(self, orient=tk.VERTICAL)
@@ -208,6 +235,9 @@ class App(tk.Tk):
         self.grid_canvas_active = True
 
     def destroy_grid_canvas(self, save_slider_positions=True):
+        """ This method destroys the grid vew
+            @param: save_slider_positions: Boolean determining whether to save or reset the positions of the grid view sliders
+        """
         # save slider positions if set to
         if(save_slider_positions):
             self.grid_canvas_saved_x = self.grid_canvas.xview()[0]
@@ -228,21 +258,32 @@ class App(tk.Tk):
         self.grid_canvas_active = False
 
     def create_loading_view(self):
+        """ This method creates the simulation loading view
+        """
+        # TODO: fix jitter during loading, possibly due to loading_text changing?
+        # initialize loading widgets
         self.loading_frame = ttk.Frame(self.body)
-        self.loading_frame.grid(column=5, row=1, sticky=(N,W,E,S), columnspan=15)
         self.loading_header = ttk.Label(self.loading_frame, text="Preparing Simulation:")
-        self.loading_header.grid(column=0, row=0, columnspan=15)
         self.loading_progress = ttk.Progressbar(self.loading_frame, orient=tk.HORIZONTAL, length=100, mode="determinate")
-        self.loading_progress.grid(column=0, row=1, columnspan=15)
         self.loading_text = ttk.Label(self.loading_frame, text="Retrieving Storm Data from NOAA")
-        self.loading_text.grid(column=0, row=2, columnspan=15)
         self.loading_cancel_btn = ttk.Button(self.loading_frame, text="Cancel", command=self.cancel_simulation_calculations)
+
+        # place loading widgets
+        self.loading_frame.grid(column=5, row=1, sticky=(N,W,E,S), columnspan=15)
+        self.loading_header.grid(column=0, row=0, columnspan=15)
+        self.loading_progress.grid(column=0, row=1, columnspan=15)
+        self.loading_text.grid(column=0, row=2, columnspan=15)
         self.loading_cancel_btn.grid(column=0, row=3, columnspan=15)
 
     def destroy_loading_view(self):
+        """ This method destroys the simulation loading view
+        """
         self.loading_frame.destroy()
 
     def create_sub_view(self, sub_nums):
+        """ This method creates the substation view
+            @param: sub_nums: The substation ids to display in the view
+        """
         # create internal sub frame
         self.sub_frame = ttk.Frame(self.body)
         self.sub_frame.grid(column=0, row=1, sticky=(N,W), columnspan=15)
@@ -289,15 +330,20 @@ class App(tk.Tk):
         self.sub_view_active = True
 
     def destroy_sub_view(self):
+        """ This method destroys the substation view
+        """
         self.sub_frame.destroy()
-        self.sub_labels = []
-        self.bus_btn_frames = []
-        self.bus_btn_sets = []
         self.sub_view_active = False
 
     def create_bus_view(self, sub_nums, bus_num):
+        """ This method creates the bus view
+            @param: sub_nums: The substation ids from substation view for going back
+            @param: bus_num: The bus id for the bus that will be displayed
+        """
+        # get branches
         branches = self.get_branches_for_bus(bus_num)
         
+        # get bus on other end of each branch
         to_buses = []
         for branch in branches:
             if(branch[0] != bus_num):
@@ -339,6 +385,7 @@ class App(tk.Tk):
             self.branch_display_vals[branches[i]] = {"branch_label":branch_label}
             current_row += 1
 
+            # TODO: Load initial values for these labels from state to handle simulation pausing
             # create GIC label
             GIC_label = ttk.Label(self.bus_frame, text="GIC: XXX.X")
             GIC_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
@@ -369,17 +416,22 @@ class App(tk.Tk):
         self.bus_view_active = True
 
     def destroy_bus_view(self):
+        """ This method destroys the bus view
+        """
         self.bus_frame.destroy()
-        self.branch_labels = []
         self.bus_view_active = False
         self.back_to_sub_btn.destroy()
 
-    ###########################
-    # State Loading Functions #
-    ###########################
+    ##########################
+    # File Loading Functions #
+    ##########################
+
+    # - These functions are for loading state from files into the application
 
     def load_file(self, *args):
-        "Loads grid file in aux format (legacy variable names, older file headers) chosen by the user into state"
+        """ This method loads a grid file in aux format (legacy variable names, older file headers) 
+            chosen by the user into state
+        """
         filetypes = (("aux files", "*.aux"),("AUX files", "*.AUX"),)
 
         # open file
@@ -555,12 +607,9 @@ class App(tk.Tk):
                 if(self.bus_view_active):
                     self.destroy_bus_view()
 
-                # perform mapping calculations at 20% graph size
-                # at 10% is possible but overkill for getting a legible graph at 100%
-                self.grid_canvas_size = 2000
-
                 # get substation data
                 # TODO: handle missing latitude or longitude data
+                # TODO: substation grounding resistance
                 self.substation_data = {}
                 self.substation_pixels = {}
                 sub_lats = []
@@ -596,6 +645,7 @@ class App(tk.Tk):
                     return
                 
                 # get line and transformer data
+                # TODO: transformer type and data for W1, W2
                 self.branch_data = {}
                 try:
                     for line in f_data["Line"]:
@@ -625,9 +675,6 @@ class App(tk.Tk):
 
                 core_event.wait()
 
-                # reset grid size back to user-defined value before displaying
-                self.grid_canvas_size = int(self.zoom_val.get()[:-1]) * 0.01 * 10000
-
                 self.redraw_grid()
                 self.title("Space Weather Analysis Tool: " + self.grid_name)
 
@@ -637,42 +684,16 @@ class App(tk.Tk):
         # ignore cancel hit on filedialog
         except AttributeError:
             None
-
-    ###############################
-    # Grid Canvas Input Functions #
-    ###############################
-
-    def execute_zoom(self, *args):
-        # update grid_canvas_size
-        self.grid_canvas_size = int(self.zoom_val.get()[:-1]) * 0.01 * 10000
-
-        # carry out change
-        if(self.grid_canvas_active):
-            self.redraw_grid()
-
-    def grid_canvas_sub_click(self, sub_num):
-        def event_handler(event):
-            # get any subs under clicked sub and pass them all to sub view
-            subs_in_click = [sub_num]
-            try:
-                for sub in self.substations_overlapped_by_sub[sub_num]:
-                    subs_in_click.append(sub)
-            except KeyError:
-                None
-
-            self.destroy_grid_canvas()
-            self.create_sub_view(subs_in_click)
-
-        return event_handler
     
-    #########################
-    # Other Input Functions #
-    #########################
+    ###########################
+    # General Input Functions #
+    ###########################
 
-    def test_fn(self, *args):
-        print("Button pressed.")
+    # - These functions handle general UI inputs
 
     def set_days_for_month(self, *args):
+        """ This method ensures that the days combobox input has the correct amount of days after a month has been chosen
+        """
         val = int(self.dmonth_val.get())
         days_in_month = 0
         if(val in [1, 3, 5, 7, 8, 10, 12]):
@@ -694,6 +715,8 @@ class App(tk.Tk):
             self.dday_input.set(str(days_in_month).rjust(2, "0"))
 
     def check_for_leap_year(self, *args):
+        """ This method ensures that the days combobox input has the correct amount of days after a year has been chosen
+        """
         val = int(self.dyear_val.get())
 
         # leap year condition
@@ -710,11 +733,19 @@ class App(tk.Tk):
                 self.dday_input.set(str(days_in_month).rjust(2, "0"))
 
     def back_to_grid(self, *args):
+        """ This method exits the substation view and loads the grid view
+        """
         self.destroy_sub_view()
         self.create_grid_canvas()
         self.redraw_grid()
 
     def bus_btn_click(self, sub_nums, bus_num):
+        """ This method creates a method that when called will exit the substation view and load
+            the bus view for the given bus
+            @param: sub_nums: The substation ids for the substation view that will be exited
+            @param: bus_num: The bus id for the bus that will be displayed in the bus view
+            return: event_handler: The resulting method
+        """
         def event_handler(*args):
             self.destroy_sub_view()
             self.create_bus_view(sub_nums, bus_num)
@@ -722,25 +753,152 @@ class App(tk.Tk):
         return event_handler
     
     def back_to_sub(self, sub_nums):
+        """ This method creates a method that when called will exit the bus view and
+            load the substation view for the given substations
+            @param: sub_nums: The substation ids for the substation view that will be loaded
+            return: event_handler: The resulting method
+        """
         def event_handler(*args):
             self.destroy_bus_view()
             self.create_sub_view(sub_nums)
 
         return event_handler
 
+    def test_fn(self, *args):
+        """ This method is for UI testing
+        """
+        print("Button pressed.")
+
+    ###############################
+    # Grid Canvas Input Functions #
+    ###############################
+
+    # - These functions handle user inputs that are specific to the grid canvas
+
+    def execute_zoom(self, *args):
+        """ This method redraws the grid view when a new zoom value has been set
+        """
+        # update grid_canvas_size
+        self.grid_canvas_size = int(self.zoom_val.get()[:-1]) * 0.01 * 10000
+
+        # carry out change
+        if(self.grid_canvas_active):
+            self.redraw_grid()
+
+    def grid_canvas_sub_click(self, sub_num):
+        """ This method creates a new method that will exit the grid view and
+            load the substation view for a given substation and any substations
+            overlapped by it
+            @param: sub_num: The substation id for the substation that the substation view will be loaded for
+            return: event_handler: The resulting method
+        """
+        def event_handler(event):
+            # get any subs under the clicked sub and pass them all to sub view
+            subs_in_click = [sub_num]
+            try:
+                for sub in self.substations_overlapped_by_sub[sub_num]:
+                    subs_in_click.append(sub)
+            except KeyError:
+                None
+
+            self.destroy_grid_canvas()
+            self.create_sub_view(subs_in_click)
+
+        return event_handler
+    
+    ##############################
+    # Simulation Input Functions #
+    ##############################
+
+    # - These functions handle user inputs that are specific to solar storm simulation
+
+    def play_or_pause_sim(self, *args):
+        """ This method either starts a new simulation, pauses a currently running simulation,
+            or resumes a currently running simulation based on user inputs and the current
+            state of the application
+        """
+        if(self.sim_running == False):
+            # lock inputs
+            self.dmonth_input.state(["disabled"])
+            self.dday_input.state(["disabled"])
+            self.dyear_input.state(["disabled"])
+            self.hour_input.state(["disabled"])
+            self.minute_input.state(["disabled"])
+            self.ampm_input.state(["disabled"])
+            self.load_btn.state(["disabled"])
+            self.play_btn.state(["disabled"])
+
+            # load date and time
+            month = int(self.dmonth_val.get())
+            day = int(self.dday_val.get())
+            year = int(self.dyear_val.get())
+            hour = int(self.hour_val.get())
+            minute = int(self.minute_input.get())
+            ampm = self.ampm_input.get()
+
+            # convert from 12hr to 24hr
+            if(ampm == "PM"):
+                if(hour != 12):
+                    hour += 12
+
+            if(ampm == "AM" and hour == 12):
+                hour = 0
+
+            # create start datetime
+            set_start_time = datetime(year, month, day, hour, minute)
+
+            # set sim_time if out of range, otherwise use existing value
+            if(self.sim_time < set_start_time or self.sim_time > (set_start_time + timedelta(minutes=59))):
+                self.sim_time = set_start_time
+
+            # load hour into database
+            if(self.start_time != set_start_time or self.grid_name != self.grid_name_at_sim_start):
+                self.start_time = set_start_time
+                self.grid_name_at_sim_start = self.grid_name
+                self.new_sim_data_required = True
+
+            # start simulation loop
+            self.sim_running = True
+            self.sim_thread = Thread(target=self.simulation_loop)
+            self.sim_thread.start()
+        else:
+            # kill simulation loop
+            self.sim_running = False
+            self.sim_thread.join(0.5)
+
+            # unlock inputs
+            self.dmonth_input.state(["!disabled"])
+            self.dday_input.state(["!disabled"])
+            self.dyear_input.state(["!disabled"])
+            self.hour_input.state(["!disabled"])
+            self.minute_input.state(["!disabled"])
+            self.ampm_input.state(["!disabled"])
+            self.load_btn.state(["!disabled"])
+
+    def cancel_simulation_calculations(self, *args):
+        """ This method cancels currently running simulation
+            calculations
+        """
+        self.sim_cancelled = True
+
     ########################
     # Simulation Functions #
     ########################
 
-    # https://pythonguides.com/python-tkinter-colors/
+    # https://pythonguides.com/python-tkinter-colors/#Python_Tkinter_Colors_RGB
     def rgb_hack(self, rgb):
+        """ This method converts a tuple of rgb integer values into a string
+            that Tkinter will accept, as Tkinter doesn't accept rgb by default
+            @param: rgb: A tuple of integers in the form (r, g, b)
+            return: Tkinter color string
+        """
         return "#%02x%02x%02x" % rgb  
 
     def simulation_loop(self):
-        """Loop that runs in a thread and carries out simulation playback.
-        The simulation runs at a scale of roughly 1 second per minute and loops after
-        it reaches an hour from start time."""
-
+        """ This method is a loop that runs in a thread and carries out simulation playback.
+            The simulation runs at a scale of roughly 1 second per minute and loops after
+            it reaches an hour from start time.
+        """
         if self.new_sim_data_required:
             self.destroy_grid_canvas()
             self.create_loading_view()
@@ -803,6 +961,7 @@ class App(tk.Tk):
                         self.play_btn.state(["!disabled"])
                         return
                 self.loading_progress["value"] = i * 25
+            # TODO: Disable cancel button here?
             self.loading_text["text"] = "Saving to Database"
             core_event.wait()
             messagebox.showinfo("Loaded!", "Simulation has been loaded!")
@@ -873,83 +1032,20 @@ class App(tk.Tk):
             if(self.sim_time == (self.start_time + timedelta(minutes=60))):
                 self.sim_time = self.start_time
 
-    def play_or_pause_sim(self, *args):
-        if(self.sim_running == False):
-            # lock inputs
-            self.dmonth_input.state(["disabled"])
-            self.dday_input.state(["disabled"])
-            self.dyear_input.state(["disabled"])
-            self.hour_input.state(["disabled"])
-            self.minute_input.state(["disabled"])
-            self.ampm_input.state(["disabled"])
-            self.load_btn.state(["disabled"])
-            self.play_btn.state(["disabled"])
-
-            # load date and time
-            month = int(self.dmonth_val.get())
-            day = int(self.dday_val.get())
-            year = int(self.dyear_val.get())
-            hour = int(self.hour_val.get())
-            minute = int(self.minute_input.get())
-            ampm = self.ampm_input.get()
-
-            # convert from 12hr to 24hr
-            if(ampm == "PM"):
-                if(hour != 12):
-                    hour += 12
-
-            if(ampm == "AM" and hour == 12):
-                hour = 0
-
-            # create start datetime
-            set_start_time = datetime(year, month, day, hour, minute)
-
-            # set sim_time if out of range, otherwise use existing value
-            if(self.sim_time < set_start_time or self.sim_time > (set_start_time + timedelta(minutes=59))):
-                self.sim_time = set_start_time
-
-            # load hour into database
-            if(self.start_time != set_start_time or self.grid_name != self.grid_name_at_sim_start):
-                self.start_time = set_start_time
-                self.grid_name_at_sim_start = self.grid_name
-                self.new_sim_data_required = True
-
-            # start simulation loop
-            self.sim_running = True
-            self.sim_thread = Thread(target=self.simulation_loop)
-            self.sim_thread.start()
-        else:
-            # kill simulation loop
-            self.sim_running = False
-            self.sim_thread.join(0.5)
-
-            # unlock inputs
-            self.dmonth_input.state(["!disabled"])
-            self.dday_input.state(["!disabled"])
-            self.dyear_input.state(["!disabled"])
-            self.hour_input.state(["!disabled"])
-            self.minute_input.state(["!disabled"])
-            self.ampm_input.state(["!disabled"])
-            self.load_btn.state(["!disabled"])
-
-    def cancel_simulation_calculations(self, *args):
-        self.sim_cancelled = True
-
-    def on_closing(self):
-        if(self.sim_running):
-            self.sim_running = False
-            self.sim_thread.join(0.5)
-
-        self.quit()
-        self.core.send_request(self.core.close_application)
-
     ########################
     # Conversion Functions #
     ########################
 
+    # - These functions handle coordinate conversions
+
     # using https://stackoverflow.com/a/2450158
     # modified to work better for canvas purposes
     def long_to_x(self, long):
+        """ This method does the conversion from longitude coordinates
+            to UI grid canvas coordinates on the x axis
+            @param: long: A longitude coordinate
+            return: A corresponding x coordinate on the grid canvas
+        """
         # center in coordinate space
         long -= (self.max_long + self.min_long) / 2
 
@@ -968,6 +1064,11 @@ class App(tk.Tk):
     # using https://stackoverflow.com/a/2450158
     # modified to work better for canvas purposes
     def lat_to_y(self, lat):
+        """ This method does the conversion from latitude coordinates
+            to UI grid canvas coordinates on the y axis
+            @param: lat: A latitude coordinate
+            return: A corresponding y coordinate on the grid canvas
+        """
         # center in coordinate space
         lat -= (self.max_lat + self.min_lat) / 2
 
@@ -991,9 +1092,13 @@ class App(tk.Tk):
     # Getter Functions #
     ####################
 
+    # - These functions assist with retrieving data for grid elements
+
     def get_branches_btwn_subs(self):
-        """Finds all the branches in the grid that run between subs and returns
-        the subs and buses connected in each branch"""
+        """ This method finds all the branches in the grid that run between substations and returns
+            the substations and buses connected in each branch
+            return: branches_btwn_subs: All the branches that run between substations
+        """
         branches_btwn_subs = []
         for ids in self.branch_data:
             # get data from state
@@ -1009,6 +1114,10 @@ class App(tk.Tk):
         return branches_btwn_subs
     
     def get_buses_for_sub(self, sub_num):
+        """ This method gets all the bus ids for a given substation
+            @param: sub_num: The substation for which to get ids
+            return: bus_nums: The bus ids for the given substation
+        """
         bus_nums = []
         for bus_num in self.bus_data:
             if(self.bus_data[bus_num]["sub_num"] == sub_num):
@@ -1017,6 +1126,10 @@ class App(tk.Tk):
         return bus_nums
     
     def get_branches_for_bus(self, bus_num):
+        """ This method gets all the branches for a given bus
+            @param: bus_num: The bus for which to get branches
+            return: branch_tuples: List of tuples that represent the branches attached to the given bus
+        """
         branch_tuples = []
         for branch_tuple in self.branch_data:
             if(branch_tuple[0] == bus_num or branch_tuple[1] == bus_num):
