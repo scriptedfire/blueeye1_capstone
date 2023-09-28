@@ -56,25 +56,32 @@ class Core():
             try:
                 retval = request["func"](request["params"])
             except Exception as e:
-                retval = e
+                self.log_to_file("Core", "Requested function " + request["func"].__name__ + " exception: " + str(e))
+                retval = str(e)
             request["retval"].append(retval)
             request["event"].set()
 
     def start_logging_loop(self):
-        # TODO: append current date and time to log filename
-        print("Logging Started")
-        with open("log.txt", "a+") as logfile:
-            print("File Opened")
+        """ This method starts the logging loop, which takes strings from a queue
+            and writes them to a file. It is intended to be called on its own thread.
+        """
+        dnow = datetime.datetime.now()
+        with open("log_ " + dnow.strftime("%m%d%Y_%H%M%S") + ".txt", "a+") as logfile:
             while(True):
                 self.logging_sem.acquire()
 
                 # log message
                 msg = self.logging_queue.pop(0)
-                print(msg)
                 if(msg == None):
                     # stop logging loop
                     return
                 logfile.write(msg + "\n")
+
+    def start_logging_thread(self):
+        """ This method starts logging on a new thread
+        """
+        self.logging_thread = Thread(target=self.start_logging_loop)
+        self.logging_thread.start()
 
     def start_gui(self):
         """ This method is a helper for starting the GUI in a seperate thread.
@@ -90,10 +97,9 @@ class Core():
         self.app_thread.start()
 
     def run_core(self):
-        """ This method starts Core
+        """ This method starts the application as a whole
         """
-        self.logging_thread = Thread(target=self.start_logging_loop)
-        self.logging_thread.start()
+        self.start_logging_thread()
         self.log_to_file("Core", "Logging Started!")
         self.start_app_thread()
         self.start_request_loop()
@@ -306,10 +312,10 @@ class Core():
         self.log_to_file("Core", "Loading Grid Took: " + str(time() - start) + " seconds")
 
     def get_data_for_time(self, params):
-        """ Request all data for a given datetime
-            @param: grid_name: The name of the grid for which data is being loaded
-            @param: timepoint: The time for which to load data
-            return: A list containing all the datapoints for the given time
+        """ This method requests all datapoints for a given datetime
+            @param: grid_name: The name of the grid for which datapoints are being loaded
+            @param: timepoint: The time for which to load datapoints
+            return: data: A list containing all the datapoints for the given time
         """
         grid_name = params["grid_name"]
         timepoint = params["timepoint"]
@@ -325,76 +331,107 @@ class Core():
         return data
     
     def calculate_simulation(self, params):
-        grid_name = params["grid_name"]
-        start_time = params["start_time"]
-        progress_sem = params["progress_sem"]
-        terminate_event = params["terminate_event"]
+        """ This method calculates an hour of datapoints for simulation display
+            @param: grid_name: The name of the grid for which to calculate datapoints
+            @param: start_time: The start time (in user's local timezone) 
+            to calculate an hour of datapoints from
+            @param: progress_sem: The semaphore is released four times for the
+            four stages in this method and can be used to keep track of calculation progress
+            @param: terminate_event: Setting this event forces this method to terminate any
+            ongoing child process and return
+            return: True if succeeded, or an error message if failed
+        """
+        try:
+            grid_name = params["grid_name"]
+            start_time = params["start_time"]
+            progress_sem = params["progress_sem"]
+            terminate_event = params["terminate_event"]
 
-        # convert start time from local to utc
-        local_timezone = datetime.datetime.now().astimezone().tzinfo
-        start_time_utc = start_time.replace(tzinfo=local_timezone)
-        start_time_utc = start_time_utc.astimezone(timezone.utc)
+            # convert start time from local to utc
+            local_timezone = datetime.datetime.now().astimezone().tzinfo
+            start_time_utc = start_time.replace(tzinfo=local_timezone).astimezone(timezone.utc)
 
-        # TODO: log start time
+            # log start time
+            self.log_to_file("Core", "Preparing simulation for Local Time: " + start_time.strftime("%m/%d/%Y, %H:%M:%S") + 
+            ", UTC: " + start_time_utc.strftime("%m/%d/%Y, %H:%M:%S"))
 
-        # get space weather data from NOAA
-        results = self.execute_process(wrap_data_scraper, {
-            "start_date" : start_time_utc, "file_path" : "."
-        }, terminate_event, True)
+            # get space weather data from NOAA
+            results = self.execute_process(wrap_data_scraper, {
+                "start_date" : start_time_utc, "file_path" : "."
+            }, terminate_event, True)
 
-        if terminate_event.is_set():
-            return "Stopped"
+            # check for termination
+            if terminate_event.is_set():
+                return "Termination event set"
 
-        print(results)
+            # extract data and return error if any
+            storm_data = None
+            data_invalid = None
+            if(len(results["retval"]) == 2):
+                storm_data = results["retval"][0]
+                data_invalid = results["retval"][1]
+            else:
+                self.log_to_file("Core", "data_scraper returned an error: " + results["retval"])
+                return "data_scraper returned an error: " + results["retval"]
 
-        storm_data = results["retval"][0]
-        data_invalid = results["retval"][1]
+            # return if data is flagged invalid
+            if data_invalid:
+                return "Invalid data received from NOAA Storm Dataminer"
 
-        if data_invalid:
-            return "Invalid data received from NOAA Storm Dataminer"
+            # notify NOAA stage complete
+            progress_sem.release()
 
-        progress_sem.release()
+            # Calculate E field values
+            resistivity_data = pd.read_csv('Application/Quebec_1D_model.csv')
+            E_field = None
+            results = self.execute_process(wrap_ElectricFieldCalculator, {
+                "resistivity_data" : resistivity_data, "solar_storm" : storm_data,
+                "min_longitude" : self.app.min_long, "max_longitude" : self.app.max_long,
+                "min_latitude" : self.app.min_lat, "max_latitude" : self.app.max_lat
+            }, terminate_event, True)
 
-        # Calculate E field values
-        resistivity_data = pd.read_csv('Application/Quebec_1D_model.csv')
-        E_field = None
-        results = self.execute_process(wrap_ElectricFieldCalculator, {
-            "resistivity_data" : resistivity_data, "solar_storm" : storm_data,
-            "min_longitude" : self.app.min_long, "max_longitude" : self.app.max_long,
-            "min_latitude" : self.app.min_lat, "max_latitude" : self.app.max_lat
-        }, terminate_event, True)
+            # check for termination
+            if terminate_event.is_set():
+                return "Termination event set"
 
-        if terminate_event.is_set():
-            return "Stopped"
+            # extract data and return error if any
+            E_field = results["retval"]
+            if isinstance(E_field, str):
+                self.log_to_file("Core", "ElectricFieldCalculator returned an error: " + E_field)
+                return "ElectricFieldCalculator returned an error: " + E_field
 
-        E_field = results["retval"]
+            # notify E field stage complete
+            progress_sem.release()
 
-        print(E_field)
+            # TODO: GIC Solver
+            self.execute_process(sleep, 5, terminate_event)
 
-        progress_sem.release()
+            if terminate_event.is_set():
+                return "Termination event set"
 
-        # GIC Solver
-        self.execute_process(sleep, 5, terminate_event)
+            progress_sem.release()
 
-        if terminate_event.is_set():
-            return "Stopped"
+            # TODO: TTC
+            self.execute_process(sleep, 5, terminate_event)
 
-        progress_sem.release()
+            if terminate_event.is_set():
+                return "Termination event set"
 
-        # TTC
-        self.execute_process(sleep, 5, terminate_event)
+            progress_sem.release()
 
-        if terminate_event.is_set():
-            return "Stopped"
+            # Store to database
+            self.fabricate_hour_of_data({"grid_name" : grid_name, "start_time" : start_time})
 
-        progress_sem.release()
-
-        # Store to database
-        self.fabricate_hour_of_data({"grid_name" : grid_name, "start_time" : start_time})
-
-        return True
+            return True
+        except Exception as e:
+            self.log_to_file("Core", "Exception encountered in calculate_simulation: " + str(e))
+            return str(e)
 
     def fabricate_hour_of_data(self, params):
+        """ This method is a diagnostic tool for testing the GUI's ability to load and play a simulation
+            @param: grid_name: The name of a grid for which to produce random simulation data
+            @param: start_time: The start time from which to produce an hour of random simulation data
+        """
         grid_name = params["grid_name"]
         start_time = params["start_time"]
 
@@ -439,7 +476,9 @@ class Core():
 
         self.save_to_file()
 
-    def close_application(self, _):
+    def close_application(self, *args):
+        """ This method closes the application. It is intended to be called from the closing method of GUI.
+        """
         self.logging_queue.append(None)
         self.logging_sem.release()
         self.logging_thread.join(0.5)
@@ -450,6 +489,13 @@ class Core():
     ###################
 
     def send_request(self, func, params = None, retval = []):
+        """ This method creates a request and sends it down the request queue.
+            It can be called from any thread.
+            @param: func: The function to run, which must be one of the Requestable Functions
+            @param: params: The parameters for the requested function as a dictionary
+            @param: retval: This variable will be appended to with the return value of the requested function
+            return: request_event: This event will be set when the requested function returns
+        """
         request_event = Event()
         request = {"event" : request_event, "func" : func,
                    "params" : params, "retval" : retval}
@@ -457,48 +503,79 @@ class Core():
         self.requests_sem.release()
         return request_event
 
+    def log_to_file(self, source, msg):
+        """ This method sends a log message down the logging queue.
+            It can be called from any thread.
+        """
+        self.logging_queue.append("From " + source + ": " + msg)
+        self.logging_sem.release()
+
     def execute_process(self, func, params, terminate_event, logging=False):
+        """ This method runs a given function as a child process that can be cancelled through an event.
+            It must only be called from the main thread due to multiprocessing requirements.
+            @param: func: The function to run, which must have only one argument
+            @param: params: The parameter(s) for the function to run, passed as the function's single argument
+            @param: terminate_event: This method will terminate the child process and return if this
+            event is set.
+            @param: logging: Boolean for whether or not the function to run supports multiprocess logging
+            (takes log_queue as a dictionary parameter and sends log messages down it)
+            return: retval: None if the child process is terminated, or the return value from the function ran,
+            or an error string if the function encountered an exception
+        """
+        if not __name__ == "__main__":
+            raise "execute_process must only be called from the main thread"
+
         ret_queue = Queue()
+
+        # initialize multiprocess logging queue if function supports it
         if logging:
             logging_queue = Queue()
             params["log_queue"] = logging_queue
+
+        # start process
         p = Process(target=mp_function_wrapper, args=(ret_queue, func, params))
         p.start()
-        print("Process Started")
+        self.log_to_file("Core", "Process " + func.__name__ + " started")
+
+        # monitor process
         while ret_queue.empty():
-            print("...")
+            # pass on log messages if multiprocess logging is being used
             if logging:
                 log_queue = params["log_queue"]
                 if not log_queue.empty():
                     self.log_to_file(func.__name__, log_queue.get_nowait())
-            sleep(1)
+
+            # terminate process and return if terminate_event is set
             if terminate_event.is_set():
-                print("Process Terminated")
                 p.terminate()
                 p.join()
+                self.log_to_file("Core", "Process " + func.__name__ + " manually terminated")
                 return None
+
+        # return process result
         retval = ret_queue.get()
         p.join()
         return retval
-
-    def log_to_file(self, source, msg):
-        self.logging_queue.append("From " + source + ": " + msg)
-        self.logging_sem.release()
 
 ######################################
 # Multiprocess Calculation Functions #
 ######################################
 
-# - These functions allow for putting long-running calculations on other processes
-# - They also allow for the safe cancellation of said processes
+# - These functions are helpers for putting long-running calculations on other processes
 
 def wrap_data_scraper(params):
+    """ This method is equivalent to data_scraper except it takes its parameters as a dictionary
+        rather than individually
+    """
     start_date = params["start_date"]
     log_queue = params["log_queue"]
     file_path = params["file_path"]
     return data_scraper(start_date, log_queue, file_path)
 
 def wrap_ElectricFieldCalculator(params):
+    """ This method is equivalent to ElectricFieldCalculator except it takes its parameters as a dictionary
+        rather than individually
+    """
     resistivity_data = params["resistivity_data"]
     solar_storm = params["solar_storm"]
     min_longitude = params["min_longitude"]
@@ -509,11 +586,16 @@ def wrap_ElectricFieldCalculator(params):
     return ElectricFieldCalculator(resistivity_data, solar_storm, min_longitude, max_longitude, min_latitude, max_latitude, log_queue)
 
 def mp_function_wrapper(ret_queue, func, params):
+    """ This method is a helper for execute_process and wraps functions for being called in a separate process
+        @param: ret_queue: A multiprocessing queue to send the function's return value or exception string down
+        @param: func: The function being wrapped
+        @param: params: The function's parameter(s) as a single argument
+    """
     try:
         retval = func(params)
         ret_queue.put({"success": True, "retval" : retval})
     except Exception as e:
-        ret_queue.put({"success": False, "retval" : e})
+        ret_queue.put({"success": False, "retval" : str(e)})
 
 if __name__ == "__main__":
     core = Core()

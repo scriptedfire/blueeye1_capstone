@@ -1,7 +1,7 @@
 # Misc.
 *.pdf
 *.icloud
-log.txt
+log_*.txt
 state.db
 *.idea
 
