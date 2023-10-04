@@ -10,6 +10,7 @@ from multiprocessing import Process, Queue
 from GUI import App
 from NOAASolarStormDataMiner import data_scraper
 from ElectricFieldPredictor import ElectricFieldCalculator
+from grid_approximations import estimate_winding_impedance, get_grounding_resistance
 
 class Core():
     # Variables for GUI subsystem
@@ -330,7 +331,7 @@ class Core():
 
         return data
     
-    def calculate_simulation(self, params):
+    def calculate_simulation_noaa(self, params):
         """ This method calculates an hour of datapoints for simulation display
             @param: grid_name: The name of the grid for which to calculate datapoints
             @param: start_time: The start time (in user's local timezone) 
@@ -346,6 +347,8 @@ class Core():
             start_time = params["start_time"]
             progress_sem = params["progress_sem"]
             terminate_event = params["terminate_event"]
+
+            # TODO: skip all stages if data for given time range is in the database
 
             # convert start time from local to utc
             local_timezone = datetime.datetime.now().astimezone().tzinfo
@@ -381,50 +384,33 @@ class Core():
             # notify NOAA stage complete
             progress_sem.release()
 
-            # Calculate E field values
-            resistivity_data = pd.read_csv('Application/Quebec_1D_model.csv')
-            E_field = None
-            results = self.execute_process(wrap_ElectricFieldCalculator, {
-                "resistivity_data" : resistivity_data, "solar_storm" : storm_data,
-                "min_longitude" : self.app.min_long, "max_longitude" : self.app.max_long,
-                "min_latitude" : self.app.min_lat, "max_latitude" : self.app.max_lat
-            }, terminate_event, True)
-
-            # check for termination
-            if terminate_event.is_set():
-                return "Termination event set"
-
-            # extract data and return error if any
-            E_field = results["retval"]
-            if isinstance(E_field, str):
-                self.log_to_file("Core", "ElectricFieldCalculator returned an error: " + E_field)
-                return "ElectricFieldCalculator returned an error: " + E_field
-
-            # notify E field stage complete
-            progress_sem.release()
-
-            # TODO: GIC Solver
-            self.execute_process(sleep, 5, terminate_event)
-
-            if terminate_event.is_set():
-                return "Termination event set"
-
-            progress_sem.release()
-
-            # TODO: TTC
-            self.execute_process(sleep, 5, terminate_event)
-
-            if terminate_event.is_set():
-                return "Termination event set"
-
-            progress_sem.release()
-
-            # Store to database
-            self.fabricate_hour_of_data({"grid_name" : grid_name, "start_time" : start_time})
-
+            self.calculate_simulation(grid_name, start_time, progress_sem, terminate_event, storm_data)
+            
             return True
         except Exception as e:
-            self.log_to_file("Core", "Exception encountered in calculate_simulation: " + str(e))
+            self.log_to_file("Core", "Exception encountered in calculate_simulation_noaa: " + str(e))
+            return str(e)
+
+    def calculate_simulation_file(self, params):
+        try:
+            grid_name = params["grid_name"]
+            storm_file = params["storm_file"]
+            progress_sem = params["progress_sem"]
+            terminate_event = params["terminate_event"]
+
+            # TODO: skip all stages if data for given time range is in the database
+
+            # Skip NOAA progress stage
+            progress_sem.release()
+
+            # TODO: handle time correctly
+            storm_data = pd.read_csv(storm_file)
+
+            self.calculate_simulation(grid_name, self.app.sim_time, progress_sem, terminate_event, storm_data)
+
+            raise "Get out"
+        except Exception as e:
+            self.log_to_file("Core", "Exception encountered in calculate_simulation_file: " + str(e))
             return str(e)
 
     def fabricate_hour_of_data(self, params):
@@ -487,6 +473,48 @@ class Core():
     ###################
     # Misc. Functions #
     ###################
+
+    def calculate_simulation(self, grid_name, start_time, progress_sem, terminate_event, storm_data):
+        # Calculate E field values
+        resistivity_data = pd.read_csv('Application/Quebec_1D_model.csv')
+        E_field = None
+        results = self.execute_process(wrap_ElectricFieldCalculator, {
+            "resistivity_data" : resistivity_data, "solar_storm" : storm_data,
+            "min_longitude" : self.app.min_long, "max_longitude" : self.app.max_long,
+            "min_latitude" : self.app.min_lat, "max_latitude" : self.app.max_lat
+        }, terminate_event, True)
+
+        # check for termination
+        if terminate_event.is_set():
+            return "Termination event set"
+
+        # extract data and return error if any
+        E_field = results["retval"]
+        if isinstance(E_field, str):
+            self.log_to_file("Core", "ElectricFieldCalculator returned an error: " + E_field)
+            return "ElectricFieldCalculator returned an error: " + E_field
+
+        # notify E field stage complete
+        progress_sem.release()
+
+        # TODO: GIC Solver
+        self.execute_process(sleep, 5, terminate_event)
+
+        if terminate_event.is_set():
+            return "Termination event set"
+
+        progress_sem.release()
+
+        # TODO: TTC
+        self.execute_process(sleep, 5, terminate_event)
+
+        if terminate_event.is_set():
+            return "Termination event set"
+
+        progress_sem.release()
+
+        # Store to database
+        self.fabricate_hour_of_data({"grid_name" : grid_name, "start_time" : start_time})
 
     def send_request(self, func, params = None, retval = []):
         """ This method creates a request and sends it down the request queue.
