@@ -21,6 +21,11 @@ URL_STORM_DATA = r"https://services.swpc.noaa.gov/products/geospace/propagated-s
 
 URL_DST = r"https://services.swpc.noaa.gov/json/geospace/geospace_dst_7_day.json"
 
+FILE_Path = r"C:\\Users\\steph\\GitHub\\blueeye1_capstone\\Electric Field Calculator"
+
+def clean_column(time_array: np.array, data_array: np.array) -> np.array:
+    return
+
 def json_dst_to_pandas(json_object:object) -> pd.DataFrame:
     """ json object of dst data to a pandas dataframe for NOAA geospace_dst file
         @param: json_object: json file object
@@ -158,7 +163,7 @@ def check_data(data:pd.DataFrame) -> [pd.DataFrame, bool]:
     
     # remove remaining invalid data
     data = data.dropna()
-    data.reset_index(inplace=True)
+    data.reset_index(drop=True, inplace=True)
 
     # if too much of the data is invalid, inform the caller with a flag
     # NOTE: if it is less than 10, there is less than 10 minutes of sim data
@@ -167,6 +172,32 @@ def check_data(data:pd.DataFrame) -> [pd.DataFrame, bool]:
     
     return data, is_bad         
                
+def interpolate_data(data: pd.DataFrame) -> pd.DataFrame:
+    time = data["time"].to_numpy(dtype=float)
+    print(time)
+    new_time = np.arange(time[0], time[-1], 60, dtype=float)
+    print(data["speed"].to_numpy(dtype=float))
+    speed = np.interp(new_time, time, data["speed"].to_numpy(dtype=float))
+
+    density = np.interp(new_time, time, data["density"].to_numpy(dtype=float))
+
+    Vx = np.interp(new_time, time, data["Vx"].to_numpy(dtype=float))
+
+    Vy = np.interp(new_time, time, data["Vy"].to_numpy(dtype=float))
+
+    Vz = np.interp(new_time, time, data["Vz"].to_numpy(dtype=float))
+
+    Bx = np.interp(new_time, time, data["Bx"].to_numpy(dtype=float))
+
+    By = np.interp(new_time, time, data["By"].to_numpy(dtype=float))
+
+    Bz = np.interp(new_time, time, data["Bz"].to_numpy(dtype=float))
+
+    dst = np.interp(new_time, time, data["dst"].to_numpy(dtype=float))
+
+    new_data = {"time": new_time, "speed": speed, "density": density, "Vx": Vx, "Vy": Vy, "Vz": Vz, "Bx": Bx, "By": By, "Bz": Bz, "dst": dst}
+
+    return pd.DataFrame(new_data)
 
 def data_scraper(start_date:str, log_queue:object, file_path:str = None) -> [pd.DataFrame, bool]:
     """This is the function that will be called to run the data scraper
@@ -221,6 +252,8 @@ def data_scraper(start_date:str, log_queue:object, file_path:str = None) -> [pd.
     
     log_queue.put("Cleaning Scraped Data.\n")
     data, is_invalid = check_data(data)
+
+    data = interpolate_data(data)
     # create file with the data if a file path is given
     if file_path:
         log_queue.put("Saving data to file path...\n")

@@ -3,7 +3,7 @@ from tkinter import N,S,E,W
 from tkinter import ttk
 from tkinter import filedialog as fdialog
 from tkinter import messagebox
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from threading import Thread, Semaphore, Event
 from time import sleep
 
@@ -926,7 +926,8 @@ class App(tk.Tk):
             hour = 0
 
         # create start datetime
-        set_start_time = datetime(year, month, day, hour, minute)
+        local_timezone = datetime.now().astimezone().tzinfo
+        set_start_time = datetime(year, month, day, hour, minute).replace(tzinfo=local_timezone)
 
         self.start_time = set_start_time
         self.sim_time = set_start_time
@@ -1122,7 +1123,7 @@ class App(tk.Tk):
             sleep(1)
             self.sim_time += timedelta(minutes=1)
             # TODO: Roll over at sim end time rather than 1 hour constant
-            if(self.sim_time == (self.start_time + timedelta(minutes=60))):
+            if(self.sim_time >= (self.start_time + timedelta(minutes=60))):
                 self.sim_time = self.start_time
 
     ########################
