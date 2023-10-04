@@ -320,10 +320,11 @@ class Core():
         """
         grid_name = params["grid_name"]
         timepoint = params["timepoint"]
+        utc_timepoint = local_to_utc(timepoint)
 
         transaction = self.db_conn.cursor()
 
-        transaction.execute("""SELECT * FROM Datapoint WHERE GRID_NAME=? AND DPOINT_TIME=?""", (grid_name, timepoint.strftime("%m/%d/%Y, %H:%M:%S")))
+        transaction.execute("""SELECT * FROM Datapoint WHERE GRID_NAME=? AND DPOINT_TIME=?""", (grid_name, utc_timepoint.strftime("%m/%d/%Y, %H:%M:%S")))
 
         data = transaction.fetchall()
 
@@ -360,7 +361,7 @@ class Core():
 
             # get space weather data from NOAA
             results = self.execute_process(wrap_data_scraper, {
-                "start_date" : start_time_utc, "file_path" : "."
+                "start_date" : start_time, "file_path" : "."
             }, terminate_event, True)
 
             # check for termination
@@ -381,12 +382,23 @@ class Core():
             if data_invalid:
                 return "Invalid data received from NOAA Storm Dataminer"
 
+            # extract time
+            time_data = storm_data["time"].to_numpy(dtype=float)
+
+            # check that the range is greater than one hour
+            start_time = datetime.datetime.fromtimestamp(time_data[0], tz=timezone.utc)
+            end_time = datetime.datetime.fromtimestamp(time_data[-1], tz=timezone.utc)
+            if(end_time < (start_time + timedelta(minutes=60))):
+                return "Less than one hour of data received from NOAA Storm Dataminer"
+
+            # set times for GUI
+            self.app.start_time = utc_to_local(start_time)
+            self.app.sim_time = utc_to_local(start_time)
+
             # notify NOAA stage complete
             progress_sem.release()
 
-            self.calculate_simulation(grid_name, start_time, progress_sem, terminate_event, storm_data)
-            
-            return True
+            return self.calculate_simulation(grid_name, progress_sem, terminate_event, storm_data)
         except Exception as e:
             self.log_to_file("Core", "Exception encountered in calculate_simulation_noaa: " + str(e))
             return str(e)
@@ -403,12 +415,26 @@ class Core():
             # Skip NOAA progress stage
             progress_sem.release()
 
-            # TODO: handle time correctly
             storm_data = pd.read_csv(storm_file)
 
-            self.calculate_simulation(grid_name, self.app.sim_time, progress_sem, terminate_event, storm_data)
+            # validate file shape
+            if not (storm_data.columns.values.tolist() == ['Unnamed: 0', 'time', 'speed', 'density', 'Vx', 'Vy', 'Vz', 'Bx', 'By', 'Bz', 'dst']):
+                return "File formatted incorrectly"
 
-            raise "Get out"
+            # extract time
+            time_data = storm_data["time"].to_numpy(dtype=float)
+
+            # check that the range is greater than one hour
+            start_time = datetime.datetime.fromtimestamp(time_data[0], tz=timezone.utc)
+            end_time = datetime.datetime.fromtimestamp(time_data[-1], tz=timezone.utc)
+            if(end_time < (start_time + timedelta(minutes=60))):
+                return "File contains less than one hour of data"
+
+            # set times for GUI
+            self.app.start_time = utc_to_local(start_time)
+            self.app.sim_time = utc_to_local(start_time)
+
+            return self.calculate_simulation(grid_name, progress_sem, terminate_event, storm_data)
         except Exception as e:
             self.log_to_file("Core", "Exception encountered in calculate_simulation_file: " + str(e))
             return str(e)
@@ -474,7 +500,7 @@ class Core():
     # Misc. Functions #
     ###################
 
-    def calculate_simulation(self, grid_name, start_time, progress_sem, terminate_event, storm_data):
+    def calculate_simulation(self, grid_name, progress_sem, terminate_event, storm_data):
         # Calculate E field values
         resistivity_data = pd.read_csv('Application/Quebec_1D_model.csv')
         E_field = None
@@ -514,7 +540,7 @@ class Core():
         progress_sem.release()
 
         # Store to database
-        self.fabricate_hour_of_data({"grid_name" : grid_name, "start_time" : start_time})
+        self.fabricate_hour_of_data({"grid_name" : grid_name, "start_time" : local_to_utc(self.app.start_time)})
 
     def send_request(self, func, params = None, retval = []):
         """ This method creates a request and sends it down the request queue.
@@ -624,6 +650,14 @@ def mp_function_wrapper(ret_queue, func, params):
         ret_queue.put({"success": True, "retval" : retval})
     except Exception as e:
         ret_queue.put({"success": False, "retval" : str(e)})
+
+def local_to_utc(time_val):
+        local_timezone = datetime.datetime.now().astimezone().tzinfo
+        return time_val.replace(tzinfo=local_timezone).astimezone(timezone.utc)
+
+def utc_to_local(time_val):
+    local_timezone = datetime.datetime.now().astimezone().tzinfo
+    return time_val.replace(tzinfo=timezone.utc).astimezone(local_timezone)
 
 if __name__ == "__main__":
     core = Core()
