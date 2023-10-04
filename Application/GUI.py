@@ -74,17 +74,12 @@ class App(tk.Tk):
     # State from user input: Start time in simulation
     start_time = None
 
-    # State from running simulation: Is sim running?, has sim been cancelled?, current time in simulation, and sim thread object
+    # State from running simulation: Is sim running?, has sim been cancelled?, current time in simulation, is the sim paused?, and sim thread object
     sim_running = False
     sim_cancelled = False
     sim_time = datetime(1970, 1, 1, 1, 1)
+    sim_pause = None
     sim_thread = None
-
-    # State from running simulation: For pause/play to work if grid is switched
-    grid_name_at_sim_start = ""
-
-    # State from running simulation: For if new simulation data is needed
-    new_sim_data_required = False
 
     def __init__(self, core):
         super().__init__()
@@ -94,6 +89,7 @@ class App(tk.Tk):
         self.title("Space Weather Analysis Tool")
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
+        self.geometry("1200x1000")
 
         # set up on closing function so that program exits correctly
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -126,33 +122,10 @@ class App(tk.Tk):
 
         # buttons
         self.load_btn = ttk.Button(self.body, text="Load Grid File", command=self.load_file)
-        self.play_btn = ttk.Button(self.body, text="Play/Pause Simulation", command=self.play_or_pause_sim)
-        self.date_label = ttk.Label(self.body, text="Solar Storm Date:")
-
-        # date input fields
-        self.dmonth_val = tk.StringVar()
-        self.dmonth_input = ttk.Combobox(self.body, textvariable=self.dmonth_val, width=3, state="readonly")
-        self.slash1_label = ttk.Label(self.body, text="/")
-        self.dday_val = tk.StringVar()
-        self.dday_input = ttk.Combobox(self.body, textvariable=self.dday_val, width=3, state="readonly")
-        self.slash2_label = ttk.Label(self.body, text="/")
-        self.dyear_val = tk.StringVar()
-        self.dyear_input = ttk.Combobox(self.body, textvariable=self.dyear_val, width=5, state="readonly")
-
-        # time input fields
-        self.time_in_label = ttk.Label(self.body, text="Solar Storm Time:")
-        self.hour_val = tk.StringVar()
-        self.hour_input = ttk.Combobox(self.body, textvariable=self.hour_val, width=3, state="readonly")
-        self.minute_val = tk.StringVar()
-        self.minute_input = ttk.Combobox(self.body, textvariable=self.minute_val, width=3, state="readonly")
-        self.ampm_val = tk.StringVar()
-        self.ampm_input = ttk.Combobox(self.body, textvariable=self.ampm_val, width=3, state="readonly")
-
-        # simulation time
-        self.time_label = ttk.Label(self.body, text="Time In Simulation: XX:XX")
+        self.start_btn = ttk.Button(self.body, text="Start Simulation", command=self.configure_sim)
 
         # play button initial state
-        self.play_btn.state(["disabled"])
+        self.start_btn.state(["disabled"])
 
         # zoom input field
         self.zoom_label = tk.Label(self.body, text="Zoom: ")
@@ -161,24 +134,6 @@ class App(tk.Tk):
 
         # get current date
         date_today = date.today()
-
-        # date input configuration with current date as initial value
-        self.dmonth_input.set(str(date_today.month))
-        self.dmonth_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1,13))))
-        self.dmonth_input.bind('<<ComboboxSelected>>', self.set_days_for_month)
-        self.dday_input.set(str(date_today.day))
-        self.dday_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1,32))))
-        self.dyear_input.set(str(date_today.year))
-        self.dyear_input["values"] = list(map(lambda val : str(val), list(range(1970, 2038))))
-        self.dyear_input.bind('<<ComboboxSelected>>', self.check_for_leap_year)
-
-        # time input configuration
-        self.hour_input.set("01")
-        self.hour_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1,13))))
-        self.minute_input.set("00")
-        self.minute_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(0,60))))
-        self.ampm_input.set("AM")
-        self.ampm_input["values"] = ["AM", "PM"]
 
         # zoom configuration
         self.zoom_input.set("10%")
@@ -190,23 +145,44 @@ class App(tk.Tk):
         self.body.grid(column=0, row=0, sticky=(N,W,E,S))
 
         self.load_btn.grid(column=0, row=0, sticky=(N,W))
+        self.start_btn.grid(column=1, row=0, sticky=(N,W))
+
+        self.zoom_label.grid(column=2, row=0, sticky=(W,E), padx=2)
+        self.zoom_input.grid(column=3, row=0, sticky=(W,E))
+
+    def switch_to_sim_active_ui(self):
+        self.load_btn.destroy()
+        self.start_btn.destroy()
+
+        self.exit_btn = ttk.Button(self.body, text="Exit", command=self.stop_sim)
+        self.play_btn = ttk.Button(self.body, text="Play", command=self.resume_sim)
+        self.pause_btn = ttk.Button(self.body, text="Pause", command=self.pause_sim)
+
+        self.time_label = ttk.Label(self.body, text=self.sim_time.strftime("%m/%d/%Y, %H:%M:%S"))
+
+        self.exit_btn.grid(column=0, row=0, sticky=(N,W))
         self.play_btn.grid(column=1, row=0, sticky=(N,W))
-        
-        self.date_label.grid(column=2, row=0, sticky=(W,E), padx=5)
-        self.dmonth_input.grid(column=3, row=0, sticky=(W,E))
-        self.slash1_label.grid(column=4, row=0, sticky=(W,E))
-        self.dday_input.grid(column=5, row=0, sticky=(W,E))
-        self.slash2_label.grid(column=6, row=0, sticky=(W,E))
-        self.dyear_input.grid(column=7, row=0, sticky=(W,E))
+        self.pause_btn.grid(column=2, row=0, sticky=(N,W))
 
-        self.time_in_label.grid(column=8, row=0, sticky=(W,E), padx=5)
-        self.hour_input.grid(column=9, row=0, sticky=(W,E))
-        self.minute_input.grid(column=10, row=0, sticky=(W,E))
-        self.ampm_input.grid(column=11, row=0, sticky=(W,E))
-        self.time_label.grid(column=12, row=0, sticky=(W,E), padx=5)
+        self.zoom_label.grid(column=3, row=0, sticky=(W,E), padx=2)
+        self.zoom_input.grid(column=4, row=0, sticky=(W,E))
 
-        self.zoom_label.grid(column=13, row=0, sticky=(W,E))
-        self.zoom_input.grid(column=14, row=0, sticky=(W,E))
+        self.time_label.grid(column=5, row=0, sticky=(W,E), padx=2)
+
+    def switch_to_sim_not_active_ui(self):
+        self.exit_btn.destroy()
+        self.play_btn.destroy()
+        self.pause_btn.destroy()
+        self.time_label.destroy()
+
+        self.load_btn = ttk.Button(self.body, text="Load Grid File", command=self.load_file)
+        self.start_btn = ttk.Button(self.body, text="Start Simulation", command=self.configure_sim)
+
+        self.load_btn.grid(column=0, row=0, sticky=(N,W))
+        self.start_btn.grid(column=1, row=0, sticky=(N,W))
+
+        self.zoom_label.grid(column=2, row=0, sticky=(W,E), padx=2)
+        self.zoom_input.grid(column=3, row=0, sticky=(W,E))        
 
     def create_grid_canvas(self):
         """ This method creates the grid view, which is initially empty
@@ -257,19 +233,106 @@ class App(tk.Tk):
         # declare canvas as inactive
         self.grid_canvas_active = False
 
-    def create_loading_view(self):
-        """ This method creates the simulation loading view
-        """
-        # TODO: fix jitter during loading, possibly due to loading_text changing?
+    def create_sim_menu_body(self):
+        self.sim_menu.protocol("WM_DELETE_WINDOW", self.cancel_sim_config)
+
+        self.sim_body = ttk.Frame(self.sim_menu, padding="3 3 12 12")
+
+        self.noaa_section_label = ttk.Label(self.sim_body, text="Use Data From NOAA")
+
+        self.date_label = ttk.Label(self.sim_body, text="Solar Storm Date:")
+
+        # date input fields
+        self.dmonth_val = tk.StringVar()
+        self.dmonth_input = ttk.Combobox(self.sim_body, textvariable=self.dmonth_val, width=3, state="readonly")
+        self.slash1_label = ttk.Label(self.sim_body, text="/")
+        self.dday_val = tk.StringVar()
+        self.dday_input = ttk.Combobox(self.sim_body, textvariable=self.dday_val, width=3, state="readonly")
+        self.slash2_label = ttk.Label(self.sim_body, text="/")
+        self.dyear_val = tk.StringVar()
+        self.dyear_input = ttk.Combobox(self.sim_body, textvariable=self.dyear_val, width=5, state="readonly")
+
+        # time input fields
+        self.time_in_label = ttk.Label(self.sim_body, text="Solar Storm Time:")
+        self.hour_val = tk.StringVar()
+        self.hour_input = ttk.Combobox(self.sim_body, textvariable=self.hour_val, width=3, state="readonly")
+        self.minute_val = tk.StringVar()
+        self.minute_input = ttk.Combobox(self.sim_body, textvariable=self.minute_val, width=3, state="readonly")
+        self.ampm_val = tk.StringVar()
+        self.ampm_input = ttk.Combobox(self.sim_body, textvariable=self.ampm_val, width=3, state="readonly")
+
+        self.confirm_btn = ttk.Button(self.sim_body, text="Confirm", command=self.play_sim_noaa)
+
+        # load storm file input
+        self.file_section_label = ttk.Label(self.sim_body, text="Load Historic Storm Data File")
+        self.load_storm_btn = ttk.Button(self.sim_body, text="Load File", command=self.play_sim_file)
+
+        # cancel out input
+        self.cancel_section_label = ttk.Label(self.sim_body, text="Cancel Simulation Configuration")
+        self.cancel_storm_btn = ttk.Button(self.sim_body, text="Cancel", command=self.cancel_sim_config)
+
+        # get current date
+        date_today = date.today()
+
+        # date input configuration with current date as initial value
+        self.dmonth_input.set(str(date_today.month))
+        self.dmonth_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1,13))))
+        self.dmonth_input.bind('<<ComboboxSelected>>', self.set_days_for_month)
+        self.dday_input.set(str(date_today.day))
+        self.dday_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1,32))))
+        self.dyear_input.set(str(date_today.year))
+        self.dyear_input["values"] = list(map(lambda val : str(val), list(range(1970, 2038))))
+        self.dyear_input.bind('<<ComboboxSelected>>', self.check_for_leap_year)
+
+        # time input configuration
+        self.hour_input.set("01")
+        self.hour_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(1,13))))
+        self.minute_input.set("00")
+        self.minute_input["values"] = list(map(lambda val : str(val).rjust(2, "0"), list(range(0,60))))
+        self.ampm_input.set("AM")
+        self.ampm_input["values"] = ["AM", "PM"]
+
+        self.sim_body.grid(column=0, row=0, sticky=(N,W,E,S))
+
+        self.noaa_section_label.grid(column=0, row=0, sticky=(W,E), pady=5, columnspan=2)
+        
+        # date placement
+        self.date_label.grid(column=0, row=1, sticky=(W,E), padx=5)
+        self.dmonth_input.grid(column=1, row=1, sticky=(W,E))
+        self.slash1_label.grid(column=2, row=1, sticky=(W,E))
+        self.dday_input.grid(column=3, row=1, sticky=(W,E))
+        self.slash2_label.grid(column=4, row=1, sticky=(W,E))
+        self.dyear_input.grid(column=5, row=1, sticky=(W,E))
+
+        # time placement
+        self.time_in_label.grid(column=6, row=1, sticky=(W,E), padx=5)
+        self.hour_input.grid(column=7, row=1, sticky=(W,E))
+        self.minute_input.grid(column=8, row=1, sticky=(W,E))
+        self.ampm_input.grid(column=9, row=1, sticky=(W,E))
+        self.confirm_btn.grid(column=10, row=1, sticky=(W,E), padx=5)
+
+        # load placement
+        self.file_section_label.grid(column=0, row=2, sticky=(W,E), pady=5, columnspan=6)
+        self.load_storm_btn.grid(column=0, row=3, sticky=(W), columnspan=2)
+
+        # cancel placement
+        self.cancel_section_label.grid(column=0, row=4, sticky=(W,E), pady=5, columnspan=6)
+        self.cancel_storm_btn.grid(column=0, row=5, sticky=(W), columnspan=2)
+
+    def switch_sim_menu_to_loading_view(self):
+        self.sim_menu.protocol("WM_DELETE_WINDOW", self.quit_sim_loading)
+
+        self.sim_body.destroy()
+
         # initialize loading widgets
-        self.loading_frame = ttk.Frame(self.body)
+        self.loading_frame = ttk.Frame(self.sim_menu, padding="3 3 12 12")
         self.loading_header = ttk.Label(self.loading_frame, text="Preparing Simulation:")
         self.loading_progress = ttk.Progressbar(self.loading_frame, orient=tk.HORIZONTAL, length=100, mode="determinate")
         self.loading_text = ttk.Label(self.loading_frame, text="Retrieving Storm Data from NOAA")
         self.loading_cancel_btn = ttk.Button(self.loading_frame, text="Cancel", command=self.cancel_simulation_calculations)
 
         # place loading widgets
-        self.loading_frame.grid(column=5, row=1, sticky=(N,W,E,S), columnspan=15)
+        self.loading_frame.grid(column=0, row=0, sticky=(N,W,E,S), columnspan=15)
         self.loading_header.grid(column=0, row=0, columnspan=15)
         self.loading_progress.grid(column=0, row=1, columnspan=15)
         self.loading_text.grid(column=0, row=2, columnspan=15)
@@ -279,6 +342,9 @@ class App(tk.Tk):
         """ This method destroys the simulation loading view
         """
         self.loading_frame.destroy()
+
+    def close_sim_config(self):
+        self.sim_menu.destroy()
 
     def create_sub_view(self, sub_nums):
         """ This method creates the substation view
@@ -679,7 +745,7 @@ class App(tk.Tk):
                 self.title("Space Weather Analysis Tool: " + self.grid_name)
 
                 # enable simulating
-                self.play_btn.state(["!disabled"])
+                self.start_btn.state(["!disabled"])
         
         # ignore cancel hit on filedialog
         except AttributeError:
@@ -805,75 +871,113 @@ class App(tk.Tk):
             self.create_sub_view(subs_in_click)
 
         return event_handler
-    
+
     ##############################
     # Simulation Input Functions #
     ##############################
 
     # - These functions handle user inputs that are specific to solar storm simulation
 
-    def play_or_pause_sim(self, *args):
-        """ This method either starts a new simulation, pauses a currently running simulation,
-            or resumes a currently running simulation based on user inputs and the current
-            state of the application
+    def configure_sim(self, *args):
+        """ This method creates the simulation configuration window
         """
-        if(self.sim_running == False):
-            # lock inputs
-            self.dmonth_input.state(["disabled"])
-            self.dday_input.state(["disabled"])
-            self.dyear_input.state(["disabled"])
-            self.hour_input.state(["disabled"])
-            self.minute_input.state(["disabled"])
-            self.ampm_input.state(["disabled"])
-            self.load_btn.state(["disabled"])
-            self.play_btn.state(["disabled"])
+        self.sim_menu = tk.Toplevel(self)
 
-            # load date and time
-            month = int(self.dmonth_val.get())
-            day = int(self.dday_val.get())
-            year = int(self.dyear_val.get())
-            hour = int(self.hour_val.get())
-            minute = int(self.minute_input.get())
-            ampm = self.ampm_input.get()
+        self.sim_menu.title("Simulation Configuration")
 
-            # convert from 12hr to 24hr
-            if(ampm == "PM"):
-                if(hour != 12):
-                    hour += 12
+        self.sim_body = ttk.Frame(self.sim_menu, padding="3 3 12 12")
 
-            if(ampm == "AM" and hour == 12):
-                hour = 0
+        self.create_sim_menu_body()
 
-            # create start datetime
-            set_start_time = datetime(year, month, day, hour, minute)
+        # grey out main window inputs
+        self.load_btn.state(["disabled"])
+        self.start_btn.state(["disabled"])
+        self.zoom_input.state(["disabled"])
 
-            # set sim_time if out of range, otherwise use existing value
-            if(self.sim_time < set_start_time or self.sim_time > (set_start_time + timedelta(minutes=59))):
-                self.sim_time = set_start_time
+        # lock off main window
+        self.sim_menu.transient(self)
+        self.sim_menu.grab_set()
+        self.wait_window(self.sim_menu)
 
-            # load hour into database
-            if(self.start_time != set_start_time or self.grid_name != self.grid_name_at_sim_start):
-                self.start_time = set_start_time
-                self.grid_name_at_sim_start = self.grid_name
-                self.new_sim_data_required = True
+    def cancel_sim_config(self, *args):
+        # unlock inputs
+        self.load_btn.state(["!disabled"])
+        self.start_btn.state(["!disabled"])
+        self.zoom_input.state(["!disabled"])
 
-            # start simulation loop
-            self.sim_running = True
-            self.sim_thread = Thread(target=self.simulation_loop)
-            self.sim_thread.start()
-        else:
-            # kill simulation loop
-            self.sim_running = False
-            self.sim_thread.join(0.5)
+        # close window
+        self.sim_menu.destroy()
 
-            # unlock inputs
-            self.dmonth_input.state(["!disabled"])
-            self.dday_input.state(["!disabled"])
-            self.dyear_input.state(["!disabled"])
-            self.hour_input.state(["!disabled"])
-            self.minute_input.state(["!disabled"])
-            self.ampm_input.state(["!disabled"])
-            self.load_btn.state(["!disabled"])
+    def play_sim_noaa(self, *args):
+        # load date and time
+        month = int(self.dmonth_val.get())
+        day = int(self.dday_val.get())
+        year = int(self.dyear_val.get())
+        hour = int(self.hour_val.get())
+        minute = int(self.minute_input.get())
+        ampm = self.ampm_input.get()
+
+        # convert from 12hr to 24hr
+        if(ampm == "PM"):
+            if(hour != 12):
+                hour += 12
+
+        if(ampm == "AM" and hour == 12):
+            hour = 0
+
+        # create start datetime
+        set_start_time = datetime(year, month, day, hour, minute)
+
+        self.start_time = set_start_time
+        self.sim_time = set_start_time
+
+        # initialize simulation pause event
+        self.sim_pause = Event()
+
+        # start simulation loop
+        self.sim_running = True
+        self.sim_thread = Thread(target=self.simulation_loop)
+        self.sim_thread.start()
+
+    def play_sim_file(self, *args):
+        # ask for storm file
+        try:
+            filetypes = (("storm data csv files", "*.csv"),)
+            storm_file = fdialog.askopenfilename(filetypes=filetypes)
+        # stop on cancel hit on filedialog
+        except AttributeError:
+            return
+
+        # initialize simulation pause event
+        self.sim_pause = Event()
+
+        # start simulation loop
+        self.sim_running = True
+        self.sim_thread = Thread(target=self.simulation_loop, args=(storm_file,))
+        self.sim_thread.start()
+
+    def quit_sim_loading(self, *args):
+        # kill simulation loop
+        self.sim_running = False
+        self.sim_thread.join(0.5)
+
+        self.cancel_sim_config()
+
+    def stop_sim(self, *args):
+        # kill simulation loop
+        self.sim_running = False
+        self.sim_thread.join(0.5)
+
+        self.switch_to_sim_not_active_ui()
+        self.destroy_grid_canvas()
+        self.create_grid_canvas()
+        self.redraw_grid()
+
+    def pause_sim(self, *args):
+        self.sim_pause.set()
+
+    def resume_sim(self, *args):
+        self.sim_pause.clear()
 
     def cancel_simulation_calculations(self, *args):
         """ This method cancels currently running simulation
@@ -894,87 +998,75 @@ class App(tk.Tk):
         """
         return "#%02x%02x%02x" % rgb  
 
-    def simulation_loop(self):
+    def simulation_loop(self, storm_file = None):
         """ This method is a loop that runs in a thread and carries out simulation playback.
             The simulation runs at a scale of roughly 1 second per minute and loops after
             it reaches an hour from start time.
         """
-        if self.new_sim_data_required:
-            self.destroy_grid_canvas()
-            self.create_loading_view()
-            loading_sem = Semaphore(value=0)
-            terminate_event = Event()
-            retval = []
-            core_event = self.core.send_request(self.core.calculate_simulation, {
+        self.switch_sim_menu_to_loading_view()
+        loading_sem = Semaphore(value=0)
+        terminate_event = Event()
+        retval = []
+        core_event = None
+        if(storm_file == None):
+            core_event = self.core.send_request(self.core.calculate_simulation_noaa, {
                 "grid_name" : self.grid_name, "start_time" : self.start_time,
                 "progress_sem" : loading_sem, "terminate_event" : terminate_event
             }, retval)
-            for i in range(1,5):
-                if(i == 2):
-                    self.loading_text["text"] = "Calculating Electric Field"
-                elif(i == 3):
-                    self.loading_text["text"] = "Calculating GICS"
-                elif(i == 4):
-                    self.loading_text["text"] = "Calculating TTCs"
-                while not loading_sem.acquire(blocking=False):
-                    if self.sim_cancelled:
-                        # calculations canceled
-                        self.sim_cancelled = False
-                        print("Attempting to terminate calculations")
-                        terminate_event.set()
-                        core_event.wait()
-                        self.destroy_loading_view()
-                        self.create_grid_canvas()
-                        self.redraw_grid()
-                        self.sim_running = False
-                        # unlock inputs
-                        self.dmonth_input.state(["!disabled"])
-                        self.dday_input.state(["!disabled"])
-                        self.dyear_input.state(["!disabled"])
-                        self.hour_input.state(["!disabled"])
-                        self.minute_input.state(["!disabled"])
-                        self.ampm_input.state(["!disabled"])
-                        self.load_btn.state(["!disabled"])
-                        self.play_btn.state(["!disabled"])
-                        return
-                    if not self.sim_running:
-                        # terminate calculations and return to grid view
-                        print("Attempting to terminate calculations")
-                        terminate_event.set()
-                        core_event.wait()
-                        return
-                    if core_event.is_set():
-                        # calculations failed
-                        messagebox.showinfo("Simulation Error", retval[0])
-                        self.destroy_loading_view()
-                        self.create_grid_canvas()
-                        self.redraw_grid()
-                        self.sim_running = False
-                        # unlock inputs
-                        self.dmonth_input.state(["!disabled"])
-                        self.dday_input.state(["!disabled"])
-                        self.dyear_input.state(["!disabled"])
-                        self.hour_input.state(["!disabled"])
-                        self.minute_input.state(["!disabled"])
-                        self.ampm_input.state(["!disabled"])
-                        self.load_btn.state(["!disabled"])
-                        self.play_btn.state(["!disabled"])
-                        return
-                self.loading_progress["value"] = i * 25
-            # TODO: Disable cancel button here?
-            self.loading_text["text"] = "Saving to Database"
-            core_event.wait()
-            messagebox.showinfo("Loaded!", "Simulation has been loaded!")
-            self.destroy_loading_view()
-            self.create_grid_canvas()
-            self.redraw_grid()
-            self.new_sim_data_required = False
+        else:
+            core_event = self.core.send_request(self.core.calculate_simulation_file, {
+                "grid_name" : self.grid_name, "storm_file" : storm_file,
+                "progress_sem" : loading_sem, "terminate_event" : terminate_event
+            }, retval)
+        for i in range(1,5):
+            if(i == 2):
+                self.loading_text["text"] = "Calculating Electric Field"
+            elif(i == 3):
+                self.loading_text["text"] = "Calculating GICS"
+            elif(i == 4):
+                self.loading_text["text"] = "Calculating TTCs"
+            while not loading_sem.acquire(blocking=False):
+                if self.sim_cancelled:
+                    # calculations canceled
+                    self.sim_cancelled = False
+                    self.core.log_to_file("GUI", "Attempting to terminate calculations")
+                    terminate_event.set()
+                    core_event.wait()
 
-        self.play_btn.state(["!disabled"])
+                    # switch views
+                    self.destroy_loading_view()
+                    self.create_sim_menu_body()
+                    self.sim_running = False
+                    return
+                if not self.sim_running:
+                    # terminate calculations and return to grid view
+                    self.core.log_to_file("GUI", "Attempting to terminate calculations")
+                    terminate_event.set()
+                    core_event.wait()
+                    return
+                if core_event.is_set():
+                    # calculations failed
+                    messagebox.showinfo("Simulation Error", retval[0])
+
+                    # switch views
+                    self.destroy_loading_view()
+                    self.create_sim_menu_body()
+                    self.sim_running = False
+                    return
+            self.loading_progress["value"] = i * 25
+        self.loading_cancel_btn.state(["disabled"])
+        self.loading_text["text"] = "Saving to Database"
+        core_event.wait()
+        messagebox.showinfo("Loaded!", "Simulation has been loaded!")
+        self.switch_to_sim_active_ui()
+        self.close_sim_config()
 
         while(self.sim_running):
+            if(self.sim_pause.is_set()):
+                continue
+            
             # update time label
-            self.time_label["text"] = "Time In Simulation: " + self.sim_time.strftime("%I:%M %p")
+            self.time_label["text"] = "Time In Simulation: " + self.sim_time.strftime("%m/%d/%Y, %H:%M:%S")
 
             # load data for minute
             retval = []
@@ -1029,6 +1121,7 @@ class App(tk.Tk):
             # update sim time
             sleep(1)
             self.sim_time += timedelta(minutes=1)
+            # TODO: Roll over at sim end time rather than 1 hour constant
             if(self.sim_time == (self.start_time + timedelta(minutes=60))):
                 self.sim_time = self.start_time
 
