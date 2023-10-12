@@ -1,6 +1,71 @@
 import math
 import numpy as np
 import pandas as pd
+from scipy.interpolate import RegularGridInterpolator
+import make3DPandas # this is only imported for testing
+
+
+def get_line_Efield(df_3D: pd.DataFrame, from_coords: list, to_coords: list) -> pd.DataFrame:
+
+    """ This function takes in a multi index pandas dataframe indexed by time, longitude and latitude.
+        It also requires the from coordinates and to coordinates of a TL
+        @param: df_3d: the 3D pandas dataframe
+        @param: from_coords: the coordinates of the from bus in degrees (longitude, latitude)
+        @param: to_coords: the coordinates of the to bus in degrees (longitude, latitude)
+        return: line_dict: dataframe with the time series data of the e field data for a single line
+    """
+
+    index_list = df_3D.index
+    north_east = (df_3D.index[0][1], df_3D.index[0][2])
+    south_east  = (df_3D.index[0][1], df_3D.index[1][2])
+
+    north_west = (df_3D.index[2][1], df_3D.index[2][2])
+    south_west = (df_3D.index[2][1], df_3D.index[3][2])
+
+    west_east = (df_3D.index[2][1], df_3D.index[0][1])
+    south_north = (df_3D.index[1][2], df_3D.index[0][2])
+
+
+    time_array = []
+    time = 0
+    for i in index_list:
+        if i[0] == time:
+            continue
+        time = i[0]
+        time_array.append(time)
+
+    time_array = np.array(time_array)
+
+    line_dict = {'time': time_array, 'Ex': np.zeros(time_array.size), 'Ey': np.zeros(time_array.size)}
+
+    for i, time in enumerate(time_array):
+        north_east_Efield = [df_3D.loc[(time, north_east[0], north_east[1]), 'Ex'], df_3D.loc[(time, north_east[0], north_east[1]), 'Ey']]
+        north_west_Efield = [df_3D.loc[(time, north_west[0], north_west[1]), 'Ex'], df_3D.loc[(time, north_west[0], north_west[1]), 'Ey']]
+
+        south_east_Efield = [df_3D.loc[(time, south_east[0], south_east[1]), 'Ex'], df_3D.loc[(time, south_east[0], south_east[1]), 'Ey']]
+        south_west_Efield = [df_3D.loc[(time, south_west[0], south_west[1]), 'Ex'], df_3D.loc[(time, south_west[0], south_west[1]), 'Ey']]
+        
+        data_x = [[south_west_Efield[0], south_east_Efield[0]],
+                  [north_west_Efield[0], north_east_Efield[0]]]
+        data_y = [[south_west_Efield[1], south_east_Efield[1]],
+                  [north_west_Efield[1], north_east_Efield[1]]]
+        
+        E_field_grid_x = RegularGridInterpolator((west_east, south_north), data_x) 
+        E_field_grid_y = RegularGridInterpolator((west_east, south_north), data_y) 
+
+        from_to_points = np.array([from_coords, to_coords])
+        from_to_Efield_x = E_field_grid_x(from_to_points)
+        from_to_Efield_y = E_field_grid_y(from_to_points)
+
+        norm_x = np.mean(from_to_Efield_x)
+
+        norm_y = np.mean(from_to_Efield_y)
+
+        line_dict["Ex"][i] = norm_x    
+        line_dict["Ey"][i] = norm_y 
+
+    return pd.DataFrame(line_dict)
+
 
 # below is hard coded dictionaries for 6 bus case
 # reworking code to be based off dictionaries rather than reading csv for grid data
@@ -118,6 +183,10 @@ E_data_6 = {'time': [1, 2],
 E_data_df_20 = pd.DataFrame(E_data_20)
 
 E_data_df_6 = pd.DataFrame(E_data_6)
+
+E_data_df_20 = make3DPandas.get3D(-88, -80, 31, 35)
+
+E_data_df_6 = make3DPandas.get3D(-88, -80, 31, 35)
 # function to find endpoints of lines and calculate length
 
 
@@ -153,7 +222,7 @@ def list_line_data(substation_data, bus_data, branch_data):
                 "to_lat": to_lat,
                 "to_long": to_long,
                 "resistance": resistance,
-                "GIC_BD": gic_bd
+                "GIC_BD": gic_bd,
             })
     return lines
 
@@ -209,26 +278,44 @@ def generate_line_length(line_data):
             "LN": LN,
             "LE": LE,
             "resistance": resistance,
-            "GIC_BD": gic_bd
+            "GIC_BD": gic_bd,
+            "from_coords": [info['from_long'], info['from_lat']],
+            "to_coords": [info['to_long'], info['to_lat']]
         })
 
     return line_length
 
 
-def input_voltage_calculation(line_length, E_data_df):
-    # Copying the 'time' column
-    IV_data = {'time': E_data_df['time']}
+def input_voltage_calculation(line_length: list, E_data_df: pd.DataFrame) -> pd.DataFrame:
+    """ This method accepts the list of a dictionary with line data in it as well as the 3D pandas dataframe with the e field data in it
+        it returns the input voltages for all time and all lines
+        @param: line_length: list of dictionaries with line data
+        @param: E_data_df: pandas dataframe with multindex e field data from Electric Field Calculator
+        return: IV_df pandas dataframe with input voltages.
+    """
+
+    IV_data = {}
+    
 
     for line in line_length:
         line_tuple = line['tuple']
         LN = line['LN']
         LE = line['LE']
 
+        from_coords = line["from_coords"]
+        to_coords = line["to_coords"]
+
+        E_line_data_df = get_line_Efield(E_data_df, from_coords, to_coords)
+
+        line_Ex = E_line_data_df['Ex']
+        line_Ey = E_line_data_df['Ey']
+
         # Calculate the value for the corresponding line number
-        IV_data[line_tuple] = (LE * E_data_df['Ex']) + (LN * E_data_df['Ey'])
-
+        IV_data[line_tuple] = (LE * line_Ex) + (LN * line_Ey)
+    # add the time to the dataframe
+    IV_data["time"] = E_line_data_df["time"]
     IV_df = pd.DataFrame(IV_data)
-
+    
     return IV_df
 
 
@@ -306,7 +393,7 @@ def generate_nodes_and_network(branch_data, bus_data, substation_data):
                 if substation_tuple in nodes[W2_side]:
                     nodes[W2_side].remove(substation_tuple)
             except Exception as e:
-                print("Error:", e)
+                print("Error:", e) # swap for log message
         elif not data["has_trans"]:
             try:
                 nodes[W1_side].append((element, "line", branch_data[element]['resistance']/3))
@@ -515,51 +602,85 @@ def gic_value_calculator(reverse_map, tl_nodes, nodal_volt_mat):
                 gics = (-1*value[0][1]) + float(((1 / value[0][0][2]) * (nodal_volt_mat[key_list2[0]] - nodal_volt_mat[key_list2[1]])))
                 gic_data[value[0][0][0]] = [gics]
             except IndexError as e:
-                print(e)
-                print(keys)
+                # print(e)
+                # print(keys)
+                continue
 
     return gic_data
 
+def GIC_Solver(Electric_Field: pd.DataFrame, substation_data: dict, bus_data: dict, branch_data: dict) -> pd.DataFrame:
+    """ This method is the single point of entry for the GIC solver. It expects the 3D pandas Dataframe from the Electric Field Calculator
+        as well as a dictionary containing the substation data bus data and branch data
+        @param: Electric_Field pandas DataFrame from the Electric Field Calculator
+        @param: substation_data: dictionary of substation data
+        @param: bus_data: dictionary of bus data
+        @param: branch_data: dictionary of branch data
+        return: gic_df: pandas dataframe of gic data
+    """
+
+    line_list = list_line_data(substation_data, bus_data, branch_data)
+
+
+    line_length = generate_line_length(line_list)
+
+    IV_df = input_voltage_calculation(line_length, Electric_Field)
+
+
+    EC_df = equivalent_current_calc(line_length, IV_df)
+
+    nodes = generate_nodes_and_network(branch_data, bus_data, substation_data)
+
+
+    nodal_index = nodal_indexer(nodes)
+    reverse_mapping = reverse_map_nodes(nodes, nodal_index, branch_data)
+
+
+    cond_mat = cond_mat_generator(nodal_index, reverse_mapping)
+
+
+    gic_df = ic_mat_generator_gic_df(nodal_index, EC_df, reverse_mapping, cond_mat)
+    return gic_df
 
 if __name__ == '__main__':
 
-    pd.set_option('display.max_columns', None)
-
-    # line_list = list_line_data(substation_data_20, bus_data_20, branch_data_20)
-
-    line_list_6 = list_line_data(substation_data_6, bus_data_6, branch_data_6)
-
-    # line_length = generate_line_length(line_list)
-
-    line_length_6 = generate_line_length(line_list_6)
-
-    # IV_df = input_voltage_calculation(line_length, E_data_df_20)
-    IV_df_6 = input_voltage_calculation(line_length_6, E_data_df_6)
-
-
-    # EC_df = equivalent_current_calc(line_length, IV_df)
-
-    EC_df_6 = equivalent_current_calc(line_length_6, IV_df_6)
-
-
-    # nodes = generate_nodes_and_network(branch_data_20, bus_data_20, substation_data_20)
-    nodes_6 = generate_nodes_and_network(branch_data_6, bus_data_6, substation_data_6)
-
-
-    # nodal_index = nodal_indexer(nodes)
-    # reverse_mapping = reverse_map_nodes(nodes, nodal_index, branch_data_20)
-
-
-    nodal_index_6 = nodal_indexer(nodes_6)
-    reverse_mapping_6 = reverse_map_nodes(nodes_6, nodal_index_6, branch_data_6)
-
-
-    cond_mat_6 = cond_mat_generator(nodal_index_6, reverse_mapping_6)
-
-    # cond_mat_20 = cond_mat_generator(nodal_index, reverse_mapping)
-
-    gic_df = ic_mat_generator_gic_df(nodal_index_6, EC_df_6, reverse_mapping_6, cond_mat_6)
-    print(gic_df)
+    print(GIC_Solver(E_data_df_6, substation_data_6, bus_data_6, branch_data_6))
+    # pd.set_option('display.max_columns', None)
+# 
+    # # line_list = list_line_data(substation_data_20, bus_data_20, branch_data_20)
+# 
+    # line_list_6 = list_line_data(substation_data_6, bus_data_6, branch_data_6)
+# 
+    # # line_length = generate_line_length(line_list)
+# 
+    # line_length_6 = generate_line_length(line_list_6)
+# 
+    # # IV_df = input_voltage_calculation(line_length, E_data_df_20)
+    # IV_df_6 = input_voltage_calculation(line_length_6, E_data_df_6)
+    # print("IV_df_6")
+    # print(IV_df_6)
+    # # EC_df = equivalent_current_calc(line_length, IV_df)
+# 
+    # EC_df_6 = equivalent_current_calc(line_length_6, IV_df_6)
+# 
+# 
+    # # nodes = generate_nodes_and_network(branch_data_20, bus_data_20, substation_data_20)
+    # nodes_6 = generate_nodes_and_network(branch_data_6, bus_data_6, substation_data_6)
+# 
+# 
+    # # nodal_index = nodal_indexer(nodes)
+    # # reverse_mapping = reverse_map_nodes(nodes, nodal_index, branch_data_20)
+# 
+# 
+    # nodal_index_6 = nodal_indexer(nodes_6)
+    # reverse_mapping_6 = reverse_map_nodes(nodes_6, nodal_index_6, branch_data_6)
+# 
+# 
+    # cond_mat_6 = cond_mat_generator(nodal_index_6, reverse_mapping_6)
+# 
+    # # cond_mat_20 = cond_mat_generator(nodal_index, reverse_mapping)
+# 
+    # gic_df = ic_mat_generator_gic_df(nodal_index_6, EC_df_6, reverse_mapping_6, cond_mat_6)
+    # print(gic_df)
 
 
 

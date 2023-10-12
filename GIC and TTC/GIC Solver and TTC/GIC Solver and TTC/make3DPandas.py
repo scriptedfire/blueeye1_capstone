@@ -40,7 +40,7 @@ def get3D(min_longitude, max_longitude, min_latitude, max_latitude):
     index = [time_index_array, longitude_index_array, latitude_index_array]
 
     index = pd.MultiIndex.from_arrays(index, names=["time", "longitude", "latitude"])
-    data_dict = {"Ex": np.zeros(length), "Ey": np.zeros(length)}
+    data_dict = {"Ex": np.arange(0, 40, 1), "Ey": np.arange(0, 40, 1)}
     data = pd.DataFrame(data_dict, index=index)
     return data
 
