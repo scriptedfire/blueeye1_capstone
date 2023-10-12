@@ -685,7 +685,8 @@ class App(tk.Tk):
                         self.substation_data[int(sub["Number"])] = {
                             "name" : sub["Name"],
                             "lat" : float(sub["Latitude"]),
-                            "long" : float(sub["Longitude"])}
+                            "long" : float(sub["Longitude"]),
+                            "ground_r" : 0.2} # TODO: get data from file or use approximation when necessary
                         sub_lats.append(float(sub["Latitude"]))
                         sub_longs.append(float(sub["Longitude"]))
                 except KeyError:
@@ -716,8 +717,9 @@ class App(tk.Tk):
                 try:
                     for line in f_data["Line"]:
                         self.branch_data[(int(line["BusNumFrom"]), int(line["BusNumTo"]), int(line["Circuit"]))] = {
-                            "has_trans" : False
-                        }
+                            "has_trans" : False, "resistance": 3.525,
+                            "type": None, "trans_w1": None, "trans_w2": None, "GIC_BD": False
+                        } # TODO: use proper data
                 except KeyError:
                     messagebox.showerror("file load error", "Transformer data missing")
                     return
@@ -725,8 +727,9 @@ class App(tk.Tk):
                 try:
                     for trans in f_data["Transformer"]:
                         self.branch_data[(int(trans["BusNumFrom"]), int(trans["BusNumTo"]), int(trans["Circuit"]))] = {
-                            "has_trans" : True
-                        }
+                            "has_trans" : True, "resistance": None,
+                            "type": "gsu", "trans_w1": 0.5, "trans_w2": None, "GIC_BD": False
+                        } # TODO: use proper data
                 except KeyError:
                     messagebox.showerror("file load error", "Transformer data missing")
                     return
