@@ -10,6 +10,8 @@ from multiprocessing import Process, Queue
 from GUI import App
 from NOAASolarStormDataMiner import data_scraper
 from ElectricFieldPredictor import ElectricFieldCalculator
+import gic_solver as gic
+from TransformerThermalCapacity import transformer_thermal_capacity
 from grid_approximations import estimate_winding_impedance, get_grounding_resistance
 
 class Core():
@@ -54,11 +56,11 @@ class Core():
             # fulfill request
             request = self.requests_queue.pop(0)
             retval = None
-            try:
-                retval = request["func"](request["params"])
-            except Exception as e:
-                self.log_to_file("Core", "Requested function " + request["func"].__name__ + " exception: " + str(e))
-                retval = str(e)
+            #try:
+            retval = request["func"](request["params"])
+            #except Exception as e:
+            #    self.log_to_file("Core", "Requested function " + request["func"].__name__ + " exception: " + str(e))
+            #   retval = str(e)
             request["retval"].append(retval)
             request["event"].set()
 
@@ -343,101 +345,101 @@ class Core():
             ongoing child process and return
             return: True if succeeded, or an error message if failed
         """
-        try:
-            grid_name = params["grid_name"]
-            start_time = params["start_time"]
-            progress_sem = params["progress_sem"]
-            terminate_event = params["terminate_event"]
+        #try:
+        grid_name = params["grid_name"]
+        start_time = params["start_time"]
+        progress_sem = params["progress_sem"]
+        terminate_event = params["terminate_event"]
 
-            # TODO: skip all stages if data for given time range is in the database
+        # TODO: skip all stages if data for given time range is in the database
 
-            # convert start time from local to utc
-            local_timezone = datetime.datetime.now().astimezone().tzinfo
-            start_time_utc = start_time.replace(tzinfo=local_timezone).astimezone(timezone.utc)
+        # convert start time from local to utc
+        local_timezone = datetime.datetime.now().astimezone().tzinfo
+        start_time_utc = start_time.replace(tzinfo=local_timezone).astimezone(timezone.utc)
 
-            # log start time
-            self.log_to_file("Core", "Preparing simulation for Local Time: " + start_time.strftime("%m/%d/%Y, %H:%M:%S") + 
-            ", UTC: " + start_time_utc.strftime("%m/%d/%Y, %H:%M:%S"))
+        # log start time
+        self.log_to_file("Core", "Preparing simulation for Local Time: " + start_time.strftime("%m/%d/%Y, %H:%M:%S") + 
+        ", UTC: " + start_time_utc.strftime("%m/%d/%Y, %H:%M:%S"))
 
-            # get space weather data from NOAA
-            results = self.execute_process(wrap_data_scraper, {
-                "start_date" : start_time, "file_path" : "."
-            }, terminate_event, True)
+        # get space weather data from NOAA
+        results = self.execute_process(wrap_data_scraper, {
+            "start_date" : start_time, "file_path" : "."
+        }, terminate_event, True)
 
-            # check for termination
-            if terminate_event.is_set():
-                return "Termination event set"
+        # check for termination
+        if terminate_event.is_set():
+            return "Termination event set"
 
-            # extract data and return error if any
-            storm_data = None
-            data_invalid = None
-            if(len(results["retval"]) == 2):
-                storm_data = results["retval"][0]
-                data_invalid = results["retval"][1]
-            else:
-                self.log_to_file("Core", "data_scraper returned an error: " + results["retval"])
-                return "data_scraper returned an error: " + results["retval"]
+        # extract data and return error if any
+        storm_data = None
+        data_invalid = None
+        if(len(results["retval"]) == 2):
+            storm_data = results["retval"][0]
+            data_invalid = results["retval"][1]
+        else:
+            self.log_to_file("Core", "data_scraper returned an error: " + results["retval"])
+            return "data_scraper returned an error: " + results["retval"]
 
-            # return if data is flagged invalid
-            if data_invalid:
-                return "Invalid data received from NOAA Storm Dataminer"
+        # return if data is flagged invalid
+        if data_invalid:
+            return "Invalid data received from NOAA Storm Dataminer"
 
-            # extract time
-            time_data = storm_data["time"].to_numpy(dtype=float)
+        # extract time
+        time_data = storm_data["time"].to_numpy(dtype=float)
 
-            # check that the range is greater than one hour
-            start_time = datetime.datetime.fromtimestamp(time_data[0], tz=timezone.utc)
-            end_time = datetime.datetime.fromtimestamp(time_data[-1], tz=timezone.utc)
-            if(end_time < (start_time + timedelta(minutes=60))):
-                return "Less than one hour of data received from NOAA Storm Dataminer"
+        # check that the range is greater than one hour
+        start_time = datetime.datetime.fromtimestamp(time_data[0], tz=timezone.utc)
+        end_time = datetime.datetime.fromtimestamp(time_data[-1], tz=timezone.utc)
+        if(end_time < (start_time + timedelta(minutes=60))):
+            return "Less than one hour of data received from NOAA Storm Dataminer"
 
-            # set times for GUI
-            self.app.start_time = utc_to_local(start_time)
-            self.app.sim_time = utc_to_local(start_time)
+        # set times for GUI
+        self.app.start_time = utc_to_local(start_time)
+        self.app.sim_time = utc_to_local(start_time)
 
-            # notify NOAA stage complete
-            progress_sem.release()
+        # notify NOAA stage complete
+        progress_sem.release()
 
-            return self.calculate_simulation(grid_name, progress_sem, terminate_event, storm_data)
-        except Exception as e:
-            self.log_to_file("Core", "Exception encountered in calculate_simulation_noaa: " + str(e))
-            return str(e)
+        return self.calculate_simulation(grid_name, progress_sem, terminate_event, storm_data)
+        #except Exception as e:
+        #    self.log_to_file("Core", "Exception encountered in calculate_simulation_noaa: " + str(e))
+        #   return str(e)
 
     def calculate_simulation_file(self, params):
-        try:
-            grid_name = params["grid_name"]
-            storm_file = params["storm_file"]
-            progress_sem = params["progress_sem"]
-            terminate_event = params["terminate_event"]
+        #try:
+        grid_name = params["grid_name"]
+        storm_file = params["storm_file"]
+        progress_sem = params["progress_sem"]
+        terminate_event = params["terminate_event"]
 
-            # TODO: skip all stages if data for given time range is in the database
+        # TODO: skip all stages if data for given time range is in the database
 
-            # Skip NOAA progress stage
-            progress_sem.release()
+        # Skip NOAA progress stage
+        progress_sem.release()
 
-            storm_data = pd.read_csv(storm_file)
+        storm_data = pd.read_csv(storm_file)
 
-            # validate file shape
-            if not (storm_data.columns.values.tolist() == ['Unnamed: 0', 'time', 'speed', 'density', 'Vx', 'Vy', 'Vz', 'Bx', 'By', 'Bz', 'dst']):
-                return "File formatted incorrectly"
+        # validate file shape
+        if not (storm_data.columns.values.tolist() == ['Unnamed: 0', 'time', 'speed', 'density', 'Vx', 'Vy', 'Vz', 'Bx', 'By', 'Bz', 'dst']):
+            return "File formatted incorrectly"
 
-            # extract time
-            time_data = storm_data["time"].to_numpy(dtype=float)
+        # extract time
+        time_data = storm_data["time"].to_numpy(dtype=float)
 
-            # check that the range is greater than one hour
-            start_time = datetime.datetime.fromtimestamp(time_data[0], tz=timezone.utc)
-            end_time = datetime.datetime.fromtimestamp(time_data[-1], tz=timezone.utc)
-            if(end_time < (start_time + timedelta(minutes=60))):
-                return "File contains less than one hour of data"
+        # check that the range is greater than one hour
+        start_time = datetime.datetime.fromtimestamp(time_data[0], tz=timezone.utc)
+        end_time = datetime.datetime.fromtimestamp(time_data[-1], tz=timezone.utc)
+        if(end_time < (start_time + timedelta(minutes=60))):
+            return "File contains less than one hour of data"
 
-            # set times for GUI
-            self.app.start_time = utc_to_local(start_time)
-            self.app.sim_time = utc_to_local(start_time)
+        # set times for GUI
+        self.app.start_time = utc_to_local(start_time)
+        self.app.sim_time = utc_to_local(start_time)
 
-            return self.calculate_simulation(grid_name, progress_sem, terminate_event, storm_data)
-        except Exception as e:
-            self.log_to_file("Core", "Exception encountered in calculate_simulation_file: " + str(e))
-            return str(e)
+        return self.calculate_simulation(grid_name, progress_sem, terminate_event, storm_data)
+        #except Exception as e:
+        #    self.log_to_file("Core", "Exception encountered in calculate_simulation_file: " + str(e))
+        #    return str(e)
 
     def fabricate_hour_of_data(self, params):
         """ This method is a diagnostic tool for testing the GUI's ability to load and play a simulation
@@ -520,11 +522,50 @@ class Core():
             self.log_to_file("Core", "ElectricFieldCalculator returned an error: " + E_field)
             return "ElectricFieldCalculator returned an error: " + E_field
 
+        print(E_field)
+        print(E_field.reset_index()[::4])
+
+        E_field = E_field.reset_index()
+        times = []
+        Ex = []
+        Ey = []
+        for i in range(len(E_field)):
+            if((i % 4) == 0):
+                E_row = E_field.iloc[i]
+                #print(E_row)
+                #print(E_row["Ex"])
+                #print(E_row["Ey"])
+                times.append(E_row["time"])
+                Ex.append(E_row["Ex"])
+                Ey.append(E_row["Ey"])
+        
+        E_field_corner = {
+            "time" : times,
+            "Ex" : Ex,
+            "Ey" : Ey
+        }
+
+        E_field_corner = pd.DataFrame(E_field_corner)
+        print(E_field_corner)
+
         # notify E field stage complete
         progress_sem.release()
 
         # TODO: GIC Solver
-        self.execute_process(sleep, 5, terminate_event)
+        #self.execute_process(sleep, 5, terminate_event)
+        gic_df = wrap_gic_solver({"substation_data" : self.app.substation_data, "bus_data" : self.app.bus_data, "branch_data" : self.app.branch_data,
+        "E_field" : E_field_corner})
+        print(gic_df)
+        print(gic_df.shape)
+        print(len(self.app.branch_data))
+
+        for branch in self.app.branch_data:
+            print(branch)
+            self.app.branch_data[branch]["time"] = gic_df["time"]
+            if self.app.branch_data[branch]["has_trans"]:
+                self.app.branch_data[branch]["GICs"] = gic_df[str(branch) + self.app.branch_data[branch]["type"]]
+            else:
+                self.app.branch_data[branch]["GICs"] = gic_df[str(branch)]
 
         if terminate_event.is_set():
             return "Termination event set"
@@ -532,7 +573,9 @@ class Core():
         progress_sem.release()
 
         # TODO: TTC
-        self.execute_process(sleep, 5, terminate_event)
+        #self.execute_process(sleep, 5, terminate_event)
+        updated_branch_data = transformer_thermal_capacity(self.app.branch_data)
+        print(updated_branch_data)
 
         if terminate_event.is_set():
             return "Termination event set"
@@ -638,6 +681,22 @@ def wrap_ElectricFieldCalculator(params):
     max_latitude = params["max_latitude"]
     log_queue = params["log_queue"]
     return ElectricFieldCalculator(resistivity_data, solar_storm, min_longitude, max_longitude, min_latitude, max_latitude, log_queue)
+
+def wrap_gic_solver(params):
+    substation_data = params["substation_data"]
+    bus_data = params["bus_data"]
+    branch_data = params["branch_data"]
+    E_field = params["E_field"]
+    line_list = gic.list_line_data(substation_data, bus_data, branch_data)
+    line_length = gic.generate_line_length(line_list)
+    IV_df = gic.input_voltage_calculation(line_length, E_field)
+    EC_df = gic.equivalent_current_calc(line_length, IV_df)
+    nodes = gic.generate_nodes_and_network(branch_data, bus_data, substation_data)
+    nodal_index = gic.nodal_indexer(nodes)
+    reverse_mapping = gic.reverse_map_nodes(nodes, nodal_index, branch_data)
+    cond_mat = gic.cond_mat_generator(nodal_index, reverse_mapping)
+    gic_df = gic.ic_mat_generator_gic_df(nodal_index, EC_df, reverse_mapping, cond_mat)
+    return gic_df
 
 def mp_function_wrapper(ret_queue, func, params):
     """ This method is a helper for execute_process and wraps functions for being called in a separate process
