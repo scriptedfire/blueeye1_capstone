@@ -781,8 +781,12 @@ class App(tk.Tk):
                             trans_type = "auto"
                         elif trans_configuration in ["Gwye - Wye", "Wye - Gwye"]:
                             trans_type = "gy"
+                            # TODO: figure out why GIC solver isn't handling None winding impedance for gy
+                            w1, w2 = estimate_winding_impedance(resistance, R_base_high_side, turns_ratio, False)
                         elif trans_configuration in ["Delta - Gwye", "Gwye - Delta", "Delta - Wye", "Wye - Delta"]:
                             trans_type = "gsu"
+                            # TODO: figure out why GIC solver isn't handling None winding impedance for gsu w1
+                            w1, w2 = estimate_winding_impedance(resistance, R_base_high_side, turns_ratio, False)
 
                         self.branch_data[branch]["trans_w1"] = w1
                         self.branch_data[branch]["trans_w2"] = w2

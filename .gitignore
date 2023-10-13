@@ -4,6 +4,7 @@
 log_*.txt
 state.db
 *.idea
+TTC_log.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

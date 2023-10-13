@@ -5,12 +5,13 @@ from threading import Thread, Semaphore, Event
 from random import randrange
 from time import time
 import pandas as pd
+import numpy as np
 from time import sleep
 from multiprocessing import Process, Queue
 from GUI import App
 from NOAASolarStormDataMiner import data_scraper
 from ElectricFieldPredictor import ElectricFieldCalculator
-import gic_solver as gic
+from gic_solver import gic_computation
 from TransformerThermalCapacity import transformer_thermal_capacity
 
 class Core():
@@ -418,9 +419,9 @@ class Core():
 
         storm_data = pd.read_csv(storm_file)
 
-        # validate file shape
-        if not (storm_data.columns.values.tolist() == ['Unnamed: 0', 'time', 'speed', 'density', 'Vx', 'Vy', 'Vz', 'Bx', 'By', 'Bz', 'dst']):
-            return "File formatted incorrectly"
+        for label in storm_data.columns.values.tolist():
+            if label not in ['Unnamed: 0', 'time', 'speed', 'density', 'Vx', 'Vy', 'Vz', 'Bx', 'By', 'Bz', 'dst']:
+                return "File formatted incorrectly"
 
         # extract time
         time_data = storm_data["time"].to_numpy(dtype=float)
@@ -503,7 +504,7 @@ class Core():
 
     def calculate_simulation(self, grid_name, progress_sem, terminate_event, storm_data):
         # Calculate E field values
-        resistivity_data = pd.read_csv('Application/Quebec_1D_model.csv')
+        resistivity_data = pd.read_csv('Quebec_1D_model.csv')
         E_field = None
         results = self.execute_process(wrap_ElectricFieldCalculator, {
             "resistivity_data" : resistivity_data, "solar_storm" : storm_data,
@@ -524,6 +525,7 @@ class Core():
         print(E_field)
         print(E_field.reset_index()[::4])
 
+        # TODO: remove after interpolation is integrated
         E_field = E_field.reset_index()
         times = []
         Ex = []
@@ -531,9 +533,6 @@ class Core():
         for i in range(len(E_field)):
             if((i % 4) == 0):
                 E_row = E_field.iloc[i]
-                #print(E_row)
-                #print(E_row["Ex"])
-                #print(E_row["Ey"])
                 times.append(E_row["time"])
                 Ex.append(E_row["Ex"])
                 Ey.append(E_row["Ey"])
@@ -550,31 +549,42 @@ class Core():
         # notify E field stage complete
         progress_sem.release()
 
-        # TODO: GIC Solver
+        # GIC Solver
         #self.execute_process(sleep, 5, terminate_event)
-        gic_df = wrap_gic_solver({"substation_data" : self.app.substation_data, "bus_data" : self.app.bus_data, "branch_data" : self.app.branch_data,
+        gic_df = wrap_gic_computation({"substation_data" : self.app.substation_data, "bus_data" : self.app.bus_data, "branch_data" : self.app.branch_data,
         "E_field" : E_field_corner})
-        print(gic_df)
-        print(gic_df.shape)
+        #print(gic_df)
+        print(len(gic_df))
         print(len(self.app.branch_data))
 
+        # work around due to some keys in gic_data being str
+        # only solution is to convert all keys to str
+        non_str_keys = []
+        for part in gic_df:
+            if not isinstance(part, str):
+                non_str_keys.append(part)
+
+        for part in non_str_keys:
+            gic_df[str(part)] = gic_df[part]
+
+        print(gic_df[non_str_keys[0]])
+
         for branch in self.app.branch_data:
-            print(branch)
-            self.app.branch_data[branch]["time"] = gic_df["time"]
-            if self.app.branch_data[branch]["has_trans"]:
-                self.app.branch_data[branch]["GICs"] = gic_df[str(branch) + self.app.branch_data[branch]["type"]]
-            else:
-                self.app.branch_data[branch]["GICs"] = gic_df[str(branch)]
+            #print(branch)
+            self.app.branch_data[branch]["time"] = np.array(gic_df["time"])
+            self.app.branch_data[branch]["GICs"] = np.array(gic_df[str(branch)])
 
         if terminate_event.is_set():
             return "Termination event set"
 
         progress_sem.release()
 
-        # TODO: TTC
+        # TTC
         #self.execute_process(sleep, 5, terminate_event)
         updated_branch_data = transformer_thermal_capacity(self.app.branch_data)
-        print(updated_branch_data)
+        #for branch in updated_branch_data:
+            #if(updated_branch_data[branch]["has_trans"]):
+                #print(branch, ": ", updated_branch_data[branch]['warning_time'])
 
         if terminate_event.is_set():
             return "Termination event set"
@@ -582,7 +592,20 @@ class Core():
         progress_sem.release()
 
         # Store to database
-        self.fabricate_hour_of_data({"grid_name" : grid_name, "start_time" : local_to_utc(self.app.start_time)})
+        for branch in updated_branch_data:
+            for i in range(len(updated_branch_data[branch]["time"])):
+                transaction = self.db_conn.cursor()
+                dpoint_time = datetime.datetime.fromtimestamp(float(updated_branch_data[branch]["time"][i])).strftime("%m/%d/%Y, %H:%M:%S")
+                #print(branch, dpoint_time)
+                gic = abs(updated_branch_data[branch]["GICs"][i])
+                if(updated_branch_data[branch]["has_trans"]):
+                    ttc = updated_branch_data[branch]['warning_time']
+                transaction.execute("""INSERT INTO Datapoint(FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME,
+                    DPOINT_TIME, DPOINT_GIC, DPOINT_VLEVEL, DPOINT_TTC) VALUES(?,?,?,?,?,?,?,?)""",
+                    [branch[0], branch[1], branch[2], grid_name, dpoint_time, gic, 0, ttc])
+                transaction.close()
+
+        #self.save_to_file()
 
     def send_request(self, func, params = None, retval = []):
         """ This method creates a request and sends it down the request queue.
@@ -681,21 +704,12 @@ def wrap_ElectricFieldCalculator(params):
     log_queue = params["log_queue"]
     return ElectricFieldCalculator(resistivity_data, solar_storm, min_longitude, max_longitude, min_latitude, max_latitude, log_queue)
 
-def wrap_gic_solver(params):
+def wrap_gic_computation(params):
     substation_data = params["substation_data"]
     bus_data = params["bus_data"]
     branch_data = params["branch_data"]
     E_field = params["E_field"]
-    line_list = gic.list_line_data(substation_data, bus_data, branch_data)
-    line_length = gic.generate_line_length(line_list)
-    IV_df = gic.input_voltage_calculation(line_length, E_field)
-    EC_df = gic.equivalent_current_calc(line_length, IV_df)
-    nodes = gic.generate_nodes_and_network(branch_data, bus_data, substation_data)
-    nodal_index = gic.nodal_indexer(nodes)
-    reverse_mapping = gic.reverse_map_nodes(nodes, nodal_index, branch_data)
-    cond_mat = gic.cond_mat_generator(nodal_index, reverse_mapping)
-    gic_df = gic.ic_mat_generator_gic_df(nodal_index, EC_df, reverse_mapping, cond_mat)
-    return gic_df
+    return gic_computation(substation_data, bus_data, branch_data, E_field)
 
 def mp_function_wrapper(ret_queue, func, params):
     """ This method is a helper for execute_process and wraps functions for being called in a separate process
