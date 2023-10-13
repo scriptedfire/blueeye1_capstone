@@ -168,10 +168,10 @@ def transformer_thermal_capacity_t(GIC_array:np.array, types: str) -> [pd.DataFr
     heatup_dict = {}
     warning_dict = {}
 
-    if types.lower() == 'gsu':
-        trans_num = 23
-    elif types.lower() == 'auto':
+    if types.lower() == 'auto':
         trans_num = 10
+    else:
+        trans_num = 23
 
 #    for i in range(np.shape(Design1_array)[0]):
 #        # looping through all the design 1 transformer models
@@ -299,7 +299,7 @@ def transformer_thermal_capacity(branch_data:dict) -> dict:
         if not transformer["has_trans"]:
             continue
         gic_time = make_gic_time(branch_data[branch]['time'], branch_data[branch]['GICs'])
-        branch_data[branch]['warning_time'] = transformer_thermal_capacity_t(gic_time, branch_data[branch]['types'])
+        branch_data[branch]['warning_time'] = transformer_thermal_capacity_t(gic_time, branch_data[branch]['type'])
 
     return branch_data
 
@@ -313,5 +313,5 @@ if __name__ == '__main__':
     
 
     branch_data = {}
-    branch_data[(1, 2, 1)] = {"has_trans" : True, 'types': 'GSU', 'time': time_array, 'GICs': gic_array, 'warning_time': None}
+    branch_data[(1, 2, 1)] = {"has_trans" : True, 'type': 'GSU', 'time': time_array, 'GICs': gic_array, 'warning_time': None}
     print(transformer_thermal_capacity(branch_data))
