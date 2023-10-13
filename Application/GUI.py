@@ -6,6 +6,7 @@ from tkinter import messagebox
 from datetime import datetime, timedelta, date, timezone
 from threading import Thread, Semaphore, Event
 from time import sleep
+from grid_approximations import estimate_winding_impedance, get_grounding_resistance
 
 class App(tk.Tk):
     #############
@@ -451,6 +452,13 @@ class App(tk.Tk):
             self.branch_display_vals[branches[i]] = {"branch_label":branch_label}
             current_row += 1
 
+            # create transformer type label if transformer
+            if(self.branch_data[branches[i]]["has_trans"]):
+                type_label = ttk.Label(self.bus_frame, text="Transformer Type: " + self.branch_data[branches[i]]["type"])
+                type_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
+                self.branch_display_vals[branches[i]]["type_label"] = type_label
+                current_row += 1
+
             # TODO: Load initial values for these labels from state to handle simulation pausing
             # create GIC label
             GIC_label = ttk.Label(self.bus_frame, text="GIC: XXX.X")
@@ -506,7 +514,7 @@ class App(tk.Tk):
                 f_str = grid_file.read()
 
                 # detect whether or not legacy headers are in use
-                # TODO: support legacy headers
+                # TODO: support legacy headers?
                 legacy_headers = False
                 if "DATA (" in f_str:
                     legacy_headers = True
@@ -520,13 +528,10 @@ class App(tk.Tk):
                     # that section, the states are:
                     # waiting, section_header, waiting_data_headers,
                     # data_headers, waiting_data, data, datapoint, quoted
-                    # ignore_line, ignore_block
-                    # TODO: ignore line in waiting state
-                    # TODO: improve ignore block
+                    # ignore_script, ignore_line, ignore_line_data, ignore_block
                     parser_state = "waiting"
                     accumulator = ""
                     section_header = None
-                    branch_section = 0
                     data_headers = []
                     cur_data = 0
                     data_line = {}
@@ -536,16 +541,33 @@ class App(tk.Tk):
                             if(c.isspace()):
                                 continue
 
+                            # ignore comments
+                            if(c == '/'):
+                                accumulator += c
+                                if(accumulator == "//"):
+                                    accumulator = ""
+                                    previous_parser_state = "waiting"
+                                    parser_state = "ignore_line"
+                                continue
+
                             # section header reached, begin building
                             accumulator += c
                             parser_state = "section_header"
                         elif(parser_state == "section_header"):
                             # end of section header reached
                             if(c.isspace()):
-                                # handle two "Branch" sections
-                                if(accumulator == "Branch"):
-                                    accumulator += str(branch_section)
-                                    branch_section += 1
+                                # ignore SCRIPT sections
+                                if(accumulator == "SCRIPT"):
+                                    accumulator = ""
+                                    parser_state = "ignore_script"
+                                    continue
+
+                                # offset sections with the same name
+                                if accumulator in f_data:
+                                    offset = 1
+                                    while((accumulator + "_" + str(offset)) in f_data):
+                                        offset += 1
+                                    accumulator = accumulator + "_" + str(offset)
 
                                 section_header = accumulator
                                 accumulator = ""
@@ -564,6 +586,9 @@ class App(tk.Tk):
                                 messagebox.showerror("file load error", "Unexpected character before data headers in " + section_header + " section")
                                 return
                         elif(parser_state == "data_headers"):
+                            # ignore whitespace
+                            if(c.isspace()):
+                                continue
                             # push a data header and change states
                             if(c == ')'):
                                 data_headers.append(accumulator)
@@ -602,7 +627,7 @@ class App(tk.Tk):
                                 accumulator += c
                                 if(accumulator == "//"):
                                     accumulator = ""
-                                    parser_state = "ignore_line"
+                                    parser_state = "ignore_line_data"
                                 continue
                             if(c == '<'):
                                 parser_state = "ignore_block"
@@ -647,25 +672,30 @@ class App(tk.Tk):
 
                             # accumulate quoted datapoint
                             accumulator += c
+                        elif(parser_state == "ignore_script"):
+                            if(c == '}'):
+                                parser_state = "waiting"
                         elif(parser_state == "ignore_line"):
+                            if(c == '\n'):
+                                parser_state = "waiting"
+                        elif(parser_state == "ignore_line_data"):
                             if(c == '\n'):
                                 parser_state = "data"
                         elif(parser_state == "ignore_block"):
+                            if(c == '<'):
+                                accumulator += c
+                                continue
+                            if(c == '/'):
+                                accumulator += c
+                                if(accumulator == "</"):
+                                    accumulator = ""
+                                    parser_state = "ignore_block_end"
+                                continue
+
+                            accumulator = ""
+                        elif(parser_state == "ignore_block_end"):
                             if(c == '>'):
                                 parser_state = "data"
-
-                    # find line and transformer sections
-                    branch_to_type = {}
-                    for section in f_data:
-                        if(section[:6] == "Branch"):
-                            if(f_data[section][0]["BranchDeviceType"] == "Line"):
-                                branch_to_type[section] = "Line"
-                            elif(f_data[section][0]["BranchDeviceType"] == "Transformer"):
-                                branch_to_type[section] = "Transformer"
-
-                    # move line and transformer sections
-                    for section in branch_to_type:
-                        f_data[branch_to_type[section]] = f_data.pop(section)
                 
                 # clear any active views other than grid
                 if(self.sub_view_active):
@@ -686,7 +716,7 @@ class App(tk.Tk):
                             "name" : sub["Name"],
                             "lat" : float(sub["Latitude"]),
                             "long" : float(sub["Longitude"]),
-                            "ground_r" : 0.2} # TODO: get data from file or use approximation when necessary
+                            "ground_r" : 1.57}
                         sub_lats.append(float(sub["Latitude"]))
                         sub_longs.append(float(sub["Longitude"]))
                 except KeyError:
@@ -706,18 +736,17 @@ class App(tk.Tk):
                         self.bus_data[int(bus["Number"])] = {
                             "name" : bus["Name"],
                             "sub_num" : int(bus["SubNumber"])
-                        }
+                        } # TODO: use bus NomKv to approximate substation grounding resistance?
                 except KeyError:
                     messagebox.showerror("file load error", "Bus data missing")
                     return
                 
                 # get line and transformer data
-                # TODO: transformer type and data for W1, W2
                 self.branch_data = {}
                 try:
-                    for line in f_data["Line"]:
+                    for line in f_data["Branch"]:
                         self.branch_data[(int(line["BusNumFrom"]), int(line["BusNumTo"]), int(line["Circuit"]))] = {
-                            "has_trans" : False, "resistance": 3.525,
+                            "has_trans" : (line["BranchDeviceType"] == "Transformer"), "resistance": float(line["R"]),
                             "type": None, "trans_w1": None, "trans_w2": None, "GIC_BD": False
                         } # TODO: use proper data
                 except KeyError:
@@ -726,10 +755,38 @@ class App(tk.Tk):
                 
                 try:
                     for trans in f_data["Transformer"]:
-                        self.branch_data[(int(trans["BusNumFrom"]), int(trans["BusNumTo"]), int(trans["Circuit"]))] = {
-                            "has_trans" : True, "resistance": None,
-                            "type": "gsu", "trans_w1": 0.5, "trans_w2": None, "GIC_BD": False
-                        } # TODO: use proper data
+                        # gather values to estimate winding impedance
+                        branch = (int(trans["BusNumFrom"]), int(trans["BusNumTo"]), int(trans["Circuit"]))
+                        resistance = self.branch_data[branch]["resistance"]
+                        R_base_high_side = float(trans["XFNomkVbaseTo"])**2 / float(trans["XFMVABase"])
+                        turns_ratio = float(trans["XFNomkVbaseFrom"]) / float(trans["XFNomkVbaseTo"])
+                        if(turns_ratio < 1):
+                            turns_ratio = 1 / turns_ratio
+                        trans_configuration = trans["XFConfiguration"]
+
+                        # estimate winding impedance based on configuration
+                        # TODO: verify Wye - Delta and Delta - Wye
+                        w1 = None
+                        w2 = None
+                        if(trans_configuration == "Unknown"):
+                            w1, w2 = estimate_winding_impedance(resistance, R_base_high_side, turns_ratio, True)
+                        elif trans_configuration in ["Gwye - Wye", "Gwye - Delta", "Wye - Delta"]:
+                            w1 = estimate_winding_impedance(resistance, R_base_high_side, turns_ratio, False)[0]
+                        elif trans_configuration in ["Wye - Gwye", "Delta - Gwye", "Delta - Wye"]:
+                            w2 = estimate_winding_impedance(resistance, R_base_high_side, turns_ratio, False)[1]
+
+                        # set transformer type for GIC Solver
+                        trans_type = None
+                        if(trans_configuration == "Unknown"):
+                            trans_type = "auto"
+                        elif trans_configuration in ["Gwye - Wye", "Wye - Gwye"]:
+                            trans_type = "gy"
+                        elif trans_configuration in ["Delta - Gwye", "Gwye - Delta", "Delta - Wye", "Wye - Delta"]:
+                            trans_type = "gsu"
+
+                        self.branch_data[branch]["trans_w1"] = w1
+                        self.branch_data[branch]["trans_w2"] = w2
+                        self.branch_data[branch]["type"] = trans_type
                 except KeyError:
                     messagebox.showerror("file load error", "Transformer data missing")
                     return

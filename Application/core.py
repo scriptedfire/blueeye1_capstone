@@ -12,7 +12,6 @@ from NOAASolarStormDataMiner import data_scraper
 from ElectricFieldPredictor import ElectricFieldCalculator
 import gic_solver as gic
 from TransformerThermalCapacity import transformer_thermal_capacity
-from grid_approximations import estimate_winding_impedance, get_grounding_resistance
 
 class Core():
     # Variables for GUI subsystem
