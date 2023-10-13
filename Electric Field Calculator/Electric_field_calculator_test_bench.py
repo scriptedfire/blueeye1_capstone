@@ -45,6 +45,8 @@ K_phase_expected = [77.15, 73.76, 67.17, 62.08, 60.58, 54.97, 44.38]
 num_failed_mag = 0
 num_failed_phase = 0
 for i in range(7):
+    print("F, K_mag_expected, k_actual: ",f_m[i], K_mag_expected[i], k[i])
+    print("F, K_phase_expected, k_actual: ",f_m[i], K_phase_expected[i], k_phi[i])
     if k[i] < K_mag_expected[i] - K_mag_expected[i]*0.01 or k[i] > K_mag_expected[i] + K_mag_expected[i]*0.01:
         num_failed_mag += 1
         print(f'Earth Response magnitude Incorrect! Expected: {K_mag_expected[i]}, got {k[i]}')

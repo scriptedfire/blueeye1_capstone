@@ -111,7 +111,7 @@ def storm_data_dst_merge(data:pd.DataFrame, dst:pd.DataFrame) -> pd.DataFrame:
     for i, row in data.iterrows():
         
         if parser.parse(row['time']).timestamp() > parser.parse(dst['time'].iloc[time_slot]).timestamp(): 
-                        time_slot += 1
+            time_slot += 1
         # if the storm data extends past known dst data, use the most recent
         if time_slot >= dst["Dst"].index.size:
             time_slot = dst["Dst"].index.size - 1
@@ -120,9 +120,57 @@ def storm_data_dst_merge(data:pd.DataFrame, dst:pd.DataFrame) -> pd.DataFrame:
     data['dst'] = dst_array
     return data
 
+def check_data(data:pd.DataFrame) -> [pd.DataFrame, bool]:
+    """ This method cleans the null values from the data frame.
+        This method salvages what it can by calculating a speed from the velocity,
+        and assuming Vx = speed and Vy, Vz = 0 when velocity is null.
+        This is a valid and common assumption since Vx = 400 and Vy,Vz = 5 are normal values
 
+        @param data: dataframe with possible null elements
 
-def data_scraper(start_date:str, file:object, file_path:str = None) -> pd.DataFrame:
+        return: data  dataframe with no null elements
+        return: is_bad boolean warning of too many null elements
+    """
+    is_bad = False
+
+    # interate through the data and salvage null data where possible
+    for i, row in data.iterrows():
+        if True in row.isnull(): # don't bother trying to fix a row if there is no null elements
+            continue
+        if row["Vy"] == None:
+            dict_temp = {"Vy": 0}
+            data.loc[i, "Vy"] = dict_temp["Vy"]
+
+        if row["Vz"] == None:
+            dict_temp = {"Vz": 0}
+            data.loc[i, "Vz"] = dict_temp["Vz"]
+
+        if row["Vx"] == None and row["speed"] == None:
+             continue
+        if row["Vx"] == None and row["speed"] != None:
+            dict_temp = {"Vx": - float(row["speed"]), "Vy": 0, "Vz": 0}
+
+            data.loc[i, "Vx"] = dict_temp["Vx"]
+            data.loc[i, "Vy"] = dict_temp["Vy"]
+            data.loc[i, "Vz"] = dict_temp["Vz"]
+        
+        if row["Vx"] != None and row["speed"] == None:
+            dict_temp = {"speed": row["Vx"]}
+            data.loc[i, "speed"] = dict_temp["speed"]
+    
+    # remove remaining invalid data
+    data = data.dropna()
+    data.reset_index(inplace=True)
+
+    # if too much of the data is invalid, inform the caller with a flag
+    # NOTE: if it is less than 10, there is less than 10 minutes of sim data
+    if data.index.size < 10:
+        is_bad = True
+    
+    return data, is_bad         
+               
+
+def data_scraper(start_date:str, file:object, file_path:str = None) -> [pd.DataFrame, bool]:
     """This is the function that will be called to run the data scraper
         @param: start_date: beggining date and time for which data is requested in UTC. 
         Must be more recent than 7 days and before the most distant prediction
@@ -130,6 +178,7 @@ def data_scraper(start_date:str, file:object, file_path:str = None) -> pd.DataFr
         @param: file_path: folder where the scraped data can be saved in a csv file
         return: pandas data from with the storm data including the dst index.
     """
+    
     start_date = parser.parse(start_date).timestamp()
     count = 0
     max_attempts = 1000
@@ -148,6 +197,7 @@ def data_scraper(start_date:str, file:object, file_path:str = None) -> pd.DataFr
          return error
     file.write("Data retrieved from NOAA.\nProcessing data...\n")
     storm_data = json.load(r_storm_data)
+    
     dst = json.load(r_dst_index)
     dst_df = json_dst_to_pandas(dst)
     storm_data_df = json_storm_data_to_pandas(storm_data)
@@ -170,10 +220,12 @@ def data_scraper(start_date:str, file:object, file_path:str = None) -> pd.DataFr
     data.reset_index(inplace=True)
     data.drop(data.columns[0], axis=1, inplace=True)
     file.write("Data Processing complete.\n")
+    
+    file.write("Cleaning Scraped Data.\n")
+    data, is_invalid = check_data(data)
     # create file with the data if a file path is given
     if file_path:
         file.write("Saving data to file path...\n")
         storm_data_to_csv(data, file_path)
         file.write("Data saved to file path.\n")
-    
-    return data
+    return data, is_invalid

@@ -360,21 +360,20 @@ def calculateBField(t: np.array, N: np.array, V: np.array, Bxgsm: np.array, Bygs
     
     Bxgsm, Bygsm, Bzgsm = t04.t04(parmod, psi, xgsm, ygsm, zgsm)
     
+    Bxdip, Bydip, Bzdip = gpack.dip(xgsm, ygsm, zgsm)
     
-    Bxgeo, Bygeo, Bzgeo = gpack.geogsm(Bxgsm, Bygsm, Bzgsm, -1) #gpack.geogsm(Bxdipole, Bydipole, Bzdipole, -1)
+    Bxgeo, Bygeo, Bzgeo = gpack.geogsm(Bxgsm + Bxdip, Bygsm + Bydip, Bzgsm + Bzdip, -1)
     # e = east component (y)
     # n = north component (x)
     # u = upward component (z)
-    h = 0
     
-    Be, Bn, Bu = ppigrf.igrf(longitudeCBF, latitudeCBF, h, datetime.fromtimestamp(t[-1]))
     e, n, u = geo_to_enu(Bxgeo, Bygeo, Bzgeo, longitudeCBF, latitudeCBF)
     
-    return n + Bn, e + Be, u + Bu
+    return n, e, u
 
 
 
-def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_longitude: float, min_latitude:float, max_latitude:float, granularity:float) -> pd.DataFrame:
+def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_longitude: float, min_latitude:float, max_latitude:float) -> pd.DataFrame:
     """ Take in strom data in a pandas dataframe each column will be a different data type. The rows will be time points
         @param: storm_data: Multiindex pandas dataframe. First index is a time point, 
         second is longitude, third is latitude. The columns are the solar storm data
@@ -386,8 +385,8 @@ def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_l
         The above five parameters form a grid where the magnetic field vector will be calculated for each time point
         return: pandas dataframe with the total magnetic field vector (nT) at each time (sec) and location long, lat (degrees)
     """
-    longitude_vector = np.arange(min_longitude, max_longitude, granularity)
-    latitude_vector = np.arange(min_latitude, max_latitude, granularity)
+    longitude_vector = np.array([max_longitude, min_longitude])
+    latitude_vector = np.array([max_latitude, min_latitude])
     time_array = storm_data["time"].to_numpy(copy=True)
     
     
