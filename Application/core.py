@@ -9,7 +9,7 @@ import numpy as np
 from time import sleep
 from multiprocessing import Process, Queue
 from GUI import App
-from NOAASolarStormDataMiner import data_scraper
+from NOAASolarStormDataMiner import data_scraper, interpolate_data
 from ElectricFieldPredictor import ElectricFieldCalculator
 from gic_solver import gic_computation
 from TransformerThermalCapacity import transformer_thermal_capacity
@@ -420,8 +420,10 @@ class Core():
         storm_data = pd.read_csv(storm_file)
 
         for label in storm_data.columns.values.tolist():
-            if label not in ['Unnamed: 0', 'time', 'speed', 'density', 'Vx', 'Vy', 'Vz', 'Bx', 'By', 'Bz', 'dst']:
+            if label not in ['Unnamed: 0', "index", 'time', 'speed', 'density', 'Vx', 'Vy', 'Vz', 'Bx', 'By', 'Bz', 'dst']:
                 return "File formatted incorrectly"
+            
+        storm_data = interpolate_data(storm_data)
 
         # extract time
         time_data = storm_data["time"].to_numpy(dtype=float)

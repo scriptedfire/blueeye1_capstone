@@ -735,7 +735,8 @@ class App(tk.Tk):
                     for bus in f_data["Bus"]:
                         self.bus_data[int(bus["Number"])] = {
                             "name" : bus["Name"],
-                            "sub_num" : int(bus["SubNumber"])
+                            "sub_num" : int(bus["SubNumber"]),
+                            "NomkV" : float(bus["NomkV"])
                         } # TODO: use bus NomKv to approximate substation grounding resistance?
                 except KeyError:
                     messagebox.showerror("file load error", "Bus data missing")
@@ -745,8 +746,10 @@ class App(tk.Tk):
                 self.branch_data = {}
                 try:
                     for line in f_data["Branch"]:
+                        resistance = self.bus_data[int(line["BusNumFrom"])]["NomkV"]**2 / float(f_data["Transformer"][0]["XFMVABase"])
+                        resistance *= float(line["R"])
                         self.branch_data[(int(line["BusNumFrom"]), int(line["BusNumTo"]), int(line["Circuit"]))] = {
-                            "has_trans" : (line["BranchDeviceType"] == "Transformer"), "resistance": float(line["R"]),
+                            "has_trans" : (line["BranchDeviceType"] == "Transformer"), "resistance": resistance,
                             "type": None, "trans_w1": None, "trans_w2": None, "GIC_BD": False
                         } # TODO: use proper data
                 except KeyError:
