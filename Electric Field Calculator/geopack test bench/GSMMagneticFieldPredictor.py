@@ -90,6 +90,8 @@ def Wt1(t : np.array, N : np.array, V : np.array, B : np.array, resolution = 5) 
           
     """
     resolution = (t[-1] - t[0]) / t.size
+    if resolution == 0:
+        resolution = 5
     # fitting constants from [1]
     r = 0.383403
     gamma = 0.916555
@@ -114,6 +116,8 @@ def Wt2(t : np.array, N : np.array, V : np.array, B : np.array, resolution = 5) 
           
     """
     resolution = (t[-1] - t[0]) / t.size
+    if resolution == 0:
+        resolution = 5
     # fitting constants from [1]
     r = 0.648176
     gamma = 0.898772
@@ -139,6 +143,8 @@ def Ws3(t : np.array, N : np.array, V : np.array, B : np.array, resolution = 5) 
           
     """
     resolution = (t[-1] - t[0]) / t.size
+    if resolution == 0:
+        resolution = 5
     # fitting constants from [1]
     r = 0.318752E-01 
     gamma = 1.29123
@@ -163,6 +169,8 @@ def Wp4(t : np.array, N : np.array, V : np.array, B : np.array, resolution = 5) 
           
     """
     resolution = (t[-1] - t[0]) / t.size
+    if resolution == 0:
+        resolution = 5
     # fitting constants from [1]
     r = 0.581168
     gamma = 1.33199
@@ -188,6 +196,8 @@ def Wr5(t : np.array, N : np.array, V : np.array, B : np.array, resolution = 5) 
           
     """
     resolution = (t[-1] - t[0]) / t.size
+    if resolution == 0:
+        resolution = 5
     # fitting constants from [1]
     R5 = 1.15070
     GAMMA5 = 0.699074
@@ -212,6 +222,8 @@ def Wr6(t : np.array, N : np.array, V : np.array, B : np.array, resolution = 5) 
           
     """
     resolution = (t[-1] - t[0]) / t.size
+    if resolution == 0:
+        resolution = 5
     # fitting constants from [1]
     R6 = 0.88 #0.843004
     GAMMA6 = 0.53 # 0.537116
@@ -313,7 +325,7 @@ def calculateSouthBField(Bxgsm: np.array, Bygsm: np.array, Bzgsm:np.array, theta
     """
     Bsouth = np.zeros(Bxgsm.size)
     for i in range(Bxgsm.size):
-        Bgeo = gpack.geogsm(Bxgsm[i], Bygsm[i], Bzgsm[i], -1)
+        Bgeo = gpack.geogsm(Bxgsm[i], -Bygsm[i], Bzgsm[i], -1)
         Bgeo = gpack.geomag(Bgeo[0], Bgeo[1], Bgeo[2], 2)
         if Bgeo[2] > 0:
             Bsouth[i] = 0
@@ -388,9 +400,9 @@ def calculateBField(t: np.array, Np: np.array, V: np.array, Bxgsm: np.array, Byg
 
     parmod = [pdyn, dst, Bygsm[-1], Bzgsm[-1], W1, W2, W3, W4, W5, W6]
     
-    Bxgsm, Bygsm, Bzgsm = t04.t04(parmod, psi, xgsm, ygsm, zgsm)
+    Bxgsm, Bygsm, Bzgsm = t04.t04(parmod, psi, xgsm, -ygsm, zgsm)
     
-    Bxdipole, Bydipole, Bzdipole = gpack.igrf_gsm(xgsm, ygsm, zgsm)
+    Bxdipole, Bydipole, Bzdipole = gpack.dip(xgsm, -ygsm, zgsm)
     
     return Bxgsm + Bxdipole, Bygsm + Bydipole, Bzgsm + Bzdipole
 

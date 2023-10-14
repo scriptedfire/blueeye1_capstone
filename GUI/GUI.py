@@ -431,7 +431,7 @@ class App(tk.Tk):
 
                     # substation w/o coordinates
                     if len(coords) == 2:
-                        self.substation_data[id] = {"lat": None, "long": None, "next_angle": next_angle}
+                        self.substation_data[id] = {"lat": None, "long": None, "next_angle": next_angle, "started_w_coords": False}
                         next_angle += self.placement_angle
                         next_angle %= 360
                         continue
@@ -444,7 +444,7 @@ class App(tk.Tk):
                     located_substations_long.append(long)
 
                     # give substations different angles for connecting substations w/o coordinates
-                    self.substation_data[id] = {"lat": lat, "long": long, "next_angle": next_angle}
+                    self.substation_data[id] = {"lat": lat, "long": long, "next_angle": next_angle, "started_w_coords": True}
                     next_angle += self.placement_angle
                     next_angle %= 360
 
@@ -959,6 +959,9 @@ class App(tk.Tk):
         return overlapped_pixels
 
     def redraw_grid(self):
+        # print message to log
+        self.core.log_to_file("GUI", "Drawing Grid at: " + self.zoom_val.get())
+
         # check if grid canvas is active, update if so, create if not
         if(self.grid_canvas_active):
             # clear canvas
@@ -1023,6 +1026,12 @@ class App(tk.Tk):
                 except KeyError:
                     self.substations_overlapped_by_sub[subs[i]] = set(subs_without_sub)
 
+        # check how many of the overlapped subs started with coords
+        overlapped_subs_that_started_w_coords = 0
+        for sub_num in self.substations_overlapped_by_sub:
+            if(self.substation_data[sub_num]["started_w_coords"]):
+                overlapped_subs_that_started_w_coords += 1
+
         # get rest of diagnostic information
         overlaps_list = []
         overlaps_count = 0
@@ -1033,6 +1042,7 @@ class App(tk.Tk):
 
         # log diagnostic information
         self.core.log_to_file("GUI", "Substations with overlap: " + str(len(self.substations_overlapped_by_sub)))
+        self.core.log_to_file("GUI", "Substations with overlap that started with coordinates: " + str(overlapped_subs_that_started_w_coords))
         self.core.log_to_file("GUI", "Pixels with overlap: " + str(overlaps_count))
         if(len(overlaps_list) > 0):
             self.core.log_to_file("GUI", "Worst overlap: " + str(max(overlaps_list)))

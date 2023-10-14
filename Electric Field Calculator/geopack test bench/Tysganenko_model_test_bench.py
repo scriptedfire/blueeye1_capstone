@@ -13,7 +13,7 @@ def rho(array1:np.array, array2:np.array):
     return cov/np.sqrt(var1 * var2)
 
 
-synthetic = pd.read_csv("B_field_prediction_2015_tsgk.csv")
+synthetic = pd.read_csv("B_field_prediction_2015_tsgk_test.csv")
 
 vector_intermagnet_x = synthetic['Bxts'].to_numpy(dtype=float)
 vector_intermagnet_y = synthetic['Byts'].to_numpy(dtype=float)
