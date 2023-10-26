@@ -462,6 +462,8 @@ class App(tk.Tk):
             # TODO: Load initial values for these labels from state to handle simulation pausing
             # create GIC label
             GIC_label = ttk.Label(self.bus_frame, text="GIC: XXX.X")
+            if(self.sim_running):
+                GIC_label["text"] = "GIC: " + str(self.branch_data[branches[i]]["Current_GIC"])
             GIC_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
             self.branch_display_vals[branches[i]]["GIC_label"] = GIC_label
             current_row += 1
@@ -469,11 +471,13 @@ class App(tk.Tk):
             # create VLEVEL and TTC labels
             if(self.branch_data[branches[i]]["has_trans"]):
                 VLEVEL_label = ttk.Label(self.bus_frame, text="VLEVEL: XXX.X")
-                VLEVEL_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
+                #VLEVEL_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
                 self.branch_display_vals[branches[i]]["VLEVEL_label"] = VLEVEL_label
                 current_row += 1
 
-                TTC_label = ttk.Label(self.bus_frame, text="TTC: XXX.X")
+                TTC_label = ttk.Label(self.bus_frame, text="Time to Overheat: XXX.X")
+                if(self.sim_running):
+                    TTC_label["text"] = "Time to Overheat: " + str(self.branch_data[branches[i]]["warning_time"])
                 TTC_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
                 self.branch_display_vals[branches[i]]["TTC_label"] = TTC_label
 
@@ -706,13 +710,12 @@ class App(tk.Tk):
                 # get substation data
                 # TODO: handle missing latitude or longitude data
                 # TODO: substation grounding resistance
-                self.substation_data = {}
-                self.substation_pixels = {}
+                temp_substation_data = {}
                 sub_lats = []
                 sub_longs = []
                 try:
                     for sub in f_data["Substation"]:
-                        self.substation_data[int(sub["Number"])] = {
+                        temp_substation_data[int(sub["Number"])] = {
                             "name" : sub["Name"],
                             "lat" : float(sub["Latitude"]),
                             "long" : float(sub["Longitude"]),
@@ -721,46 +724,55 @@ class App(tk.Tk):
                         sub_longs.append(float(sub["Longitude"]))
                 except KeyError:
                     messagebox.showerror("file load error", "Substation data missing")
+                    if(self.grid_name != ""):
+                        self.redraw_grid()
+                        self.start_btn.state(["!disabled"])
                     return
                 
                 # load limits into state
-                self.min_long = min(sub_longs)
-                self.min_lat = min(sub_lats)
-                self.max_long = max(sub_longs)
-                self.max_lat = max(sub_lats)
+                temp_min_long = min(sub_longs)
+                temp_min_lat = min(sub_lats)
+                temp_max_long = max(sub_longs)
+                temp_max_lat = max(sub_lats)
 
                 # get bus data
-                self.bus_data = {}
+                temp_bus_data = {}
                 try:
                     for bus in f_data["Bus"]:
-                        self.bus_data[int(bus["Number"])] = {
+                        temp_bus_data[int(bus["Number"])] = {
                             "name" : bus["Name"],
                             "sub_num" : int(bus["SubNumber"]),
                             "NomkV" : float(bus["NomkV"])
                         } # TODO: use bus NomKv to approximate substation grounding resistance?
                 except KeyError:
                     messagebox.showerror("file load error", "Bus data missing")
+                    if(self.grid_name != ""):
+                        self.redraw_grid()
+                        self.start_btn.state(["!disabled"])
                     return
                 
                 # get line and transformer data
-                self.branch_data = {}
+                temp_branch_data = {}
                 try:
                     for line in f_data["Branch"]:
-                        resistance = self.bus_data[int(line["BusNumFrom"])]["NomkV"]**2 / float(f_data["Transformer"][0]["XFMVABase"])
+                        resistance = temp_bus_data[int(line["BusNumFrom"])]["NomkV"]**2 / float(f_data["Transformer"][0]["XFMVABase"])
                         resistance *= float(line["R"])
-                        self.branch_data[(int(line["BusNumFrom"]), int(line["BusNumTo"]), int(line["Circuit"]))] = {
+                        temp_branch_data[(int(line["BusNumFrom"]), int(line["BusNumTo"]), int(line["Circuit"]))] = {
                             "has_trans" : (line["BranchDeviceType"] == "Transformer"), "resistance": resistance,
-                            "type": None, "trans_w1": None, "trans_w2": None, "GIC_BD": False
-                        } # TODO: use proper data
+                            "type": None, "trans_w1": None, "trans_w2": None, "GIC_BD": False, "Current_GIC" : 0.0
+                        }
                 except KeyError:
                     messagebox.showerror("file load error", "Transformer data missing")
+                    if(self.grid_name != ""):
+                        self.redraw_grid()
+                        self.start_btn.state(["!disabled"])
                     return
                 
                 try:
                     for trans in f_data["Transformer"]:
                         # gather values to estimate winding impedance
                         branch = (int(trans["BusNumFrom"]), int(trans["BusNumTo"]), int(trans["Circuit"]))
-                        resistance = self.branch_data[branch]["resistance"]
+                        resistance = temp_branch_data[branch]["resistance"]
                         R_base_high_side = float(trans["XFNomkVbaseTo"])**2 / float(trans["XFMVABase"])
                         turns_ratio = float(trans["XFNomkVbaseFrom"]) / float(trans["XFNomkVbaseTo"])
                         if(turns_ratio < 1):
@@ -791,14 +803,25 @@ class App(tk.Tk):
                             # TODO: figure out why GIC solver isn't handling None winding impedance for gsu w1
                             w1, w2 = estimate_winding_impedance(resistance, R_base_high_side, turns_ratio, False)
 
-                        self.branch_data[branch]["trans_w1"] = w1
-                        self.branch_data[branch]["trans_w2"] = w2
-                        self.branch_data[branch]["type"] = trans_type
+                        temp_branch_data[branch]["trans_w1"] = w1
+                        temp_branch_data[branch]["trans_w2"] = w2
+                        temp_branch_data[branch]["type"] = trans_type
                 except KeyError:
                     messagebox.showerror("file load error", "Transformer data missing")
+                    if(self.grid_name != ""):
+                        self.redraw_grid()
+                        self.start_btn.state(["!disabled"])
                     return
 
+                # no errors encountered so data has been accepted
                 self.grid_name = grid_file.name[:-4]
+                self.substation_data = temp_substation_data
+                self.min_long = temp_min_long
+                self.min_lat = temp_min_lat
+                self.max_long = temp_max_long
+                self.max_lat = temp_max_lat
+                self.bus_data = temp_bus_data
+                self.branch_data = temp_branch_data
 
                 # save grid data in database
                 core_event = self.core.send_request(self.core.save_grid_data, {
@@ -1012,6 +1035,9 @@ class App(tk.Tk):
         try:
             filetypes = (("storm data csv files", "*.csv"),)
             storm_file = fdialog.askopenfilename(filetypes=filetypes)
+            # stop on cancel hit alternate behavior
+            if(storm_file == ""):
+                return
         # stop on cancel hit on filedialog
         except AttributeError:
             return
@@ -1036,6 +1062,7 @@ class App(tk.Tk):
         self.sim_running = False
         self.sim_thread.join(0.5)
 
+        # TODO: check which view is active before switching
         self.switch_to_sim_not_active_ui()
         self.destroy_grid_canvas()
         self.create_grid_canvas()
@@ -1126,6 +1153,18 @@ class App(tk.Tk):
         self.loading_text["text"] = "Saving to Database"
         core_event.wait()
         messagebox.showinfo("Loaded!", "Simulation has been loaded!")
+        # TODO: switch to grid view if not in grid view
+
+        # clear any active views other than grid
+        if(self.sub_view_active):
+            self.destroy_sub_view()
+            self.create_grid_canvas()
+            self.redraw_grid()
+        if(self.bus_view_active):
+            self.destroy_bus_view()
+            self.create_grid_canvas()
+            self.redraw_grid()
+
         self.switch_to_sim_active_ui()
         self.close_sim_config()
 
@@ -1148,21 +1187,28 @@ class App(tk.Tk):
             for point in time_data:
                 gics.append(point[5])
 
-            max_gic = max(gics)
-            min_gic = min(gics)
+            self.max_gic = max(gics)
+            self.min_gic = min(gics)
+
+            # TODO: redo this portion to run more logic for storing current values in cache
+
+            for point in time_data:
+                branch_ids = (point[0], point[1], point[2])
+                self.branch_data[branch_ids]["Current_GIC"] = point[5]
 
             if(self.grid_canvas_active):
                 # update all branch colors
                 for point in time_data:
                     try:
                         branch_ids = (point[0], point[1], point[2])
+                        #self.branch_data[branch_ids]["Current_GIC"] = point[5]
                         branch = self.branch_data[branch_ids]
                         try:
                             line_id = branch["line_id"]
                             gic = point[5]
 
                             # normalize gic
-                            normalized = (gic - min_gic) / (max_gic - min_gic)
+                            normalized = (gic - self.min_gic) / (self.max_gic - self.min_gic)
 
                             # red is max gic, blue is min gic
                             self.grid_canvas.itemconfig(line_id, fill=self.rgb_hack((int(255 * normalized), 0, int(255 * (1 - normalized)))))
@@ -1176,6 +1222,7 @@ class App(tk.Tk):
                 try:
                     branches = self.get_branches_for_bus(self.bus_view_bus_num)
                     for point in time_data:
+                        #self.branch_data[branch_ids]["Current_GIC"] = point[5]
                         branch_ids = (point[0], point[1], point[2])
                         if(branch_ids in branches):
                             labels = self.branch_display_vals[branch_ids]
@@ -1421,7 +1468,13 @@ class App(tk.Tk):
             to_sub_long = to_sub["long"]
 
             # draw
+            # TODO: initialize line with simulation colors if sim running
             line_id = self.place_wire(from_sub_long, from_sub_lat, to_sub_long, to_sub_lat)
+
+            if(self.sim_running):
+                gic = self.branch_data[(ids[2], ids[3], ids[4])]["Current_GIC"]
+                normalized = (gic - self.min_gic) / (self.max_gic - self.min_gic)
+                self.grid_canvas.itemconfig(line_id, fill=self.rgb_hack((int(255 * normalized), 0, int(255 * (1 - normalized)))))
 
             # store lines in state so they can be colored during simulation
             self.branch_data[(ids[2], ids[3], ids[4])]["line_id"] = line_id
