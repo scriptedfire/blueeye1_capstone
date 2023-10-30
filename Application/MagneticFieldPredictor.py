@@ -1,4 +1,5 @@
-from geopack import t04, gpack
+from geopack import t04
+from geopack import geopack as gpack
 import numpy as np
 import pandas as pd
 from math import *
@@ -385,8 +386,8 @@ def magnetic_field_predictor(storm_data:pd.DataFrame, min_longitude:float, max_l
         The above five parameters form a grid where the magnetic field vector will be calculated for each time point
         return: pandas dataframe with the total magnetic field vector (nT) at each time (sec) and location long, lat (degrees)
     """
-    longitude_vector = np.array([max_longitude, min_longitude])
-    latitude_vector = np.array([max_latitude, min_latitude])
+    longitude_vector = np.array([min_longitude, max_longitude])
+    latitude_vector = np.array([min_latitude, max_latitude])
     time_array = storm_data["time"].to_numpy(copy=True)
     
     

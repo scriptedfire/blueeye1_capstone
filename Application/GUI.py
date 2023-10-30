@@ -1117,7 +1117,7 @@ class App(tk.Tk):
             if(i == 2):
                 self.loading_text["text"] = "Calculating Electric Field"
             elif(i == 3):
-                self.loading_text["text"] = "Calculating GICS"
+                self.loading_text["text"] = "Calculating GICs"
             elif(i == 4):
                 self.loading_text["text"] = "Calculating TTCs"
             while not loading_sem.acquire(blocking=False):
@@ -1512,9 +1512,9 @@ class App(tk.Tk):
 
         # check how many of the overlapped subs started with coords
         overlapped_subs_that_started_w_coords = 0
-        for sub_num in self.substations_overlapped_by_sub:
-            if(self.substation_data[sub_num]["started_w_coords"]):
-                overlapped_subs_that_started_w_coords += 1
+        #for sub_num in self.substations_overlapped_by_sub:
+        #    if(self.substation_data[sub_num]["started_w_coords"]):
+        #        overlapped_subs_that_started_w_coords += 1
 
         # get rest of diagnostic information
         overlaps_list = []
