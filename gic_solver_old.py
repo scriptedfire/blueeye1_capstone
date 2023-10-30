@@ -1,74 +1,6 @@
 import math
 import numpy as np
 import pandas as pd
-from scipy.interpolate import RegularGridInterpolator
-# import make3DPandas  # this is only imported for testing
-
-
-def get_line_Efield(df_3D: pd.DataFrame, from_coords: list, to_coords: list) -> pd.DataFrame:
-    """ This function takes in a multi index pandas dataframe indexed by time, longitude and latitude.
-        It also requires the from coordinates and to coordinates of a TL
-        @param: df_3d: the 3D pandas dataframe
-        @param: from_coords: the coordinates of the from bus in degrees (longitude, latitude)
-        @param: to_coords: the coordinates of the to bus in degrees (longitude, latitude)
-        return: line_dict: dataframe with the time series data of the e field data for a single line
-    """
-
-    index_list = df_3D.index
-
-    west_east = (df_3D.index[0][1], df_3D.index[2][1])
-    south_north = (df_3D.index[0][2], df_3D.index[1][2])
-    
-    north_east = (south_north[1], west_east[1]) 
-    south_east  = (south_north[0], west_east[1]) 
-
-    north_west = (south_north[1], west_east[0]) 
-    south_west = (south_north[0], west_east[0]) 
-
-    time_array = []
-    time = 0
-    for i in index_list:
-        if i[0] == time:
-            continue
-        time = i[0]
-        time_array.append(time)
-
-    time_array = np.array(time_array)
-
-    line_dict = {'time': time_array, 'Ex': np.zeros(time_array.size), 'Ey': np.zeros(time_array.size)}
-
-    for i, time in enumerate(time_array):
-
-        north_east_Efield = [df_3D.loc[(time, north_east[1], north_east[0]), 'Ex'], df_3D.loc[(time, north_east[1], north_east[0]), 'Ey']]
-        north_west_Efield = [df_3D.loc[(time, north_west[1], north_west[0]), 'Ex'], df_3D.loc[(time, north_west[1], north_west[0]), 'Ey']]
-
-        south_east_Efield = [df_3D.loc[(time, south_east[1], south_east[0]), 'Ex'], df_3D.loc[(time, south_east[1], south_east[0]), 'Ey']]
-        south_west_Efield = [df_3D.loc[(time, south_west[1], south_west[0]), 'Ex'], df_3D.loc[(time, south_west[1], south_west[0]), 'Ey']]
-
-        data_x = [[south_west_Efield[0], south_east_Efield[0]],
-                  [north_west_Efield[0], north_east_Efield[0]]]
-        data_y = [[south_west_Efield[1], south_east_Efield[1]],
-                  [north_west_Efield[1], north_east_Efield[1]]]
-
-               
-        E_field_grid_x = RegularGridInterpolator((west_east, south_north), data_x)
-        E_field_grid_y = RegularGridInterpolator((west_east, south_north), data_y)
-
-        from_to_points = np.array([from_coords, to_coords])
-
-        from_to_Efield_x = E_field_grid_x(from_to_points)
-        from_to_Efield_y = E_field_grid_y(from_to_points)
-
-        
-        norm_x = np.mean(from_to_Efield_x)
-
-        norm_y = np.mean(from_to_Efield_y)
-        
-        line_dict["Ex"][i] = norm_x
-        line_dict["Ey"][i] = norm_y
-        
-        
-    return pd.DataFrame(line_dict)
 
 # below is hard coded dictionaries for 6 bus case and 20 bus case
 # reworking code to be based off dictionaries rather than reading csv for grid data
@@ -185,7 +117,7 @@ E_data_6 = {'time': [1, 2],
 
 E_data_20N = {'time': [1, 2],
             'Ex': [0, 0],
-            'Ey': [1, 10]}
+            'Ey': [1, 1]}
 
 E_data_20E = {'time': [1, 2],
             'Ex': [1, 1],
@@ -229,9 +161,11 @@ def list_line_data(substation_data, bus_data, branch_data):
                 "to_bus": to_bus,
                 "circuit": circuit,
                 "from_lat": from_lat,
+                "from_cords": (from_long, from_lat),
                 "from_long": from_long,
                 "to_lat": to_lat,
                 "to_long": to_long,
+                "to_cords": (to_long, to_lat),
                 "resistance": resistance,
                 "GIC_BD": gic_bd
             })
@@ -260,6 +194,8 @@ def generate_line_length(line_data):
         line_tuple = info['tuple']
         resistance = info['resistance']
         gic_bd = info['GIC_BD']
+        from_cords = info['from_cords']
+        to_cords = info['to_cords']
         # pulling other relevant data
         LN = (111.133 - (0.56 * math.cos(phi * 2))) * delta_lat
         # LN is northward length, using formula from test case/study
@@ -273,40 +209,27 @@ def generate_line_length(line_data):
             "LE": LE,
             "resistance": resistance,
             "GIC_BD": gic_bd,
-            "from_coords": [info['from_long'], info['from_lat']],
-            "to_coords": [info['to_long'], info['to_lat']]
+            "from_cords": from_cords,
+            "to_cords": to_cords
         })
 
     return line_length
 
 
-def input_voltage_calculation(line_length: list, E_data_df: pd.DataFrame) -> pd.DataFrame:
-    """ This method accepts the list of a dictionary with line data in it as well as the 3D pandas dataframe with the e field data in it
-        it returns the input voltages for all time and all lines
-        @param: line_length: list of dictionaries with line data
-        @param: E_data_df: pandas dataframe with multindex e field data from Electric Field Calculator
-        return: IV_df pandas dataframe with input voltages.
-    """
+def input_voltage_calculation(line_length, E_data_df):
+    # Copying the 'time' column into dictionary
+    IV_data = {'time': E_data_df['time']}
 
-    IV_data = {}
-
+    # looping through line list that holds lengths
     for line in line_length:
         line_tuple = line['tuple']
         LN = line['LN']
         LE = line['LE']
 
-        from_coords = line["from_coords"]
-        to_coords = line["to_coords"]
-
-        E_line_data_df = get_line_Efield(E_data_df, from_coords, to_coords)
-
-        line_Ex = E_line_data_df['Ex']
-        line_Ey = E_line_data_df['Ey']
-
         # Calculate the value for the corresponding line number
-        IV_data[line_tuple] = (LE * line_Ex) + (LN * line_Ey)
-    # add the time to the dataframe
-    IV_data["time"] = E_line_data_df["time"]
+        IV_data[line_tuple] = (LE * E_data_df['Ex']) + (LN * E_data_df['Ey'])
+
+    # converting to DataFrame
     IV_df = pd.DataFrame(IV_data)
 
     return IV_df
@@ -323,7 +246,7 @@ def equivalent_current_calc(line_data, IV_df):
         # resistance = line['resistance']
         if line['GIC_BD']:
             # GIC_BD is a capacitor modeled as very large resistance under DC conditions
-            resistance =  line['resistance'] * 2
+            resistance = line['resistance'] * 2
         else:
             resistance = line['resistance']
         indexer = line['tuple']
@@ -580,7 +503,7 @@ def ic_mat_generator_gic_df(nodal_index, EC_df, reverse_mapping, cond_mat, branc
                 gic_data[marker].append(info)
         ic_matrix = np.zeros((len(nodal_index), 1))
     gic_df = pd.DataFrame(gic_data)
-    return gic_data
+    return gic_df
 
 
 def cond_mat_generator(nodal_index, reverse_map):
@@ -774,4 +697,4 @@ if __name__ == '__main__':
 
     gic_df_20N = gic_computation(substation_data_20, bus_data_20, branch_data_20, E_data_df_20N)
 
-    # print(gic_df_20N)
+    print(gic_df_20N)

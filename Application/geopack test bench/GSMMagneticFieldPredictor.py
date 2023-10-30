@@ -1,4 +1,5 @@
-from geopack import t04, gpack, t01
+from geopack import t04
+from geopack import geopack as gpack
 import numpy as np
 from numpy.linalg import inv
 import pandas as pd

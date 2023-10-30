@@ -1,13 +1,14 @@
 import numpy as np
 import pandas as pd
+from dateutil import parser
 
-def get3D(min_longitude, max_longitude, min_latitude, max_latitude):
+def get3D(min_longitude, max_longitude, min_latitude, max_latitude, time_array):
     """ This method returns a pandas dataframe indexed by time, longitude, and latitude"""
-    longitude_vector = np.array([min_longitude, max_longitude])
-    latitude_vector = np.array([min_latitude, max_latitude]) 
+    longitude_vector = np.array([max_longitude, min_longitude])
+    latitude_vector = np.array([max_latitude, min_latitude]) 
 
     # edit this array to customize time series
-    time_array = np.arange(0, 100, 10)
+    #time_array = np.arange(0, 100, 10)
     
     # build time, longitude, and latitude array for pandas multindex.
     length = longitude_vector.size * latitude_vector.size * time_array.size
@@ -41,28 +42,46 @@ def get3D(min_longitude, max_longitude, min_latitude, max_latitude):
     index = [time_index_array, longitude_index_array, latitude_index_array]
     
     index = pd.MultiIndex.from_arrays(index, names=["time", "longitude", "latitude"])
-    data_dict = {"Ex":np.zeros(length), "Ey": np.zeros(length)}
+    data_dict = {"Bx":np.zeros(length), "By": np.zeros(length), "Bz": np.zeros(length)}
     data = pd.DataFrame(data_dict, index=index)
     return data
 
-# if __name__ == '__main__': is a way of specifying code that only runs if the file itself is run.
-# This means that you can import this file without this block of code executing.
-if __name__ == '__main__':
+def process_intermagnet(file_name: str):
+    mag_data = pd.read_csv(file_name)
+    print(mag_data)
+    time_array = np.zeros(mag_data.index.size)
+    hour = 0
+    insert_hour = ""
+    insert_minute = ""
+    for i in range(mag_data.index.size):
+        insert_minute = f"{(i+1)%60}"
+        if (i + 1) % 60 == 0:
+            hour += 1
+            insert_hour = f"{hour}"
+        if hour < 10:
+            insert_hour = f"0{hour}"
+        if ((i+1)%60) < 10:
+            insert_minute = f"0{(i+1)%60}"
+        time_array[i] = str(parser.parse(f"2023-10-30 {insert_hour}:{insert_minute}:00 UTC").timestamp())
+
 
     # get empty dataframe
-    data = get3D(89, 99, 45, 55)
+    data = get3D(21, 32, 59, 66, time_array)
+    print(data)
     
-    # example of how to access the dataframe
-    time = 0
-    longitude = 89
-    latitude = 45
-    #NOTE: pandas keys must be a string so use str()
-    data.loc[(str(time), str(longitude), str(latitude)), 'Ex'] = 3.2
     
     # This is an example of how to populate the dataframe or traverse it
+    primary_count = 1
+    count = 0
     for i in data.iterrows():
         # i is a panas object with some metadata. It looks something like name: (10, 89, 45), dtype:float64
         # we just want the tuple so we must use i[0] in .loc instead of just i
-        data.loc[i[0], "Ex"] = 3.2
-        data.loc[i[0], "Ey"] = 1.2
-    print(data)
+
+        data.loc[i[0], "Bx"] = float(mag_data["Bx"][count])
+        data.loc[i[0], "By"] = float(mag_data["By"][count])
+        data.loc[i[0], "Bz"] = float(mag_data["Bz"][count])
+        
+        if primary_count % 4 == 0:
+            count += 1
+        primary_count += 1
+    return data

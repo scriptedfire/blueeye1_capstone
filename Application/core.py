@@ -79,6 +79,7 @@ class Core():
                     # stop logging loop
                     return
                 logfile.write(msg + "\n")
+                logfile.flush()
 
     def start_logging_thread(self):
         """ This method starts logging on a new thread
@@ -506,7 +507,7 @@ class Core():
 
     def calculate_simulation(self, grid_name, progress_sem, terminate_event, storm_data):
         # Calculate E field values
-        resistivity_data = pd.read_csv('Quebec_1D_model.csv')
+        resistivity_data = pd.read_csv('Finland_1D_model_old.csv')
         E_field = None
         results = self.execute_process(wrap_ElectricFieldCalculator, {
             "resistivity_data" : resistivity_data, "solar_storm" : storm_data,

@@ -5,6 +5,7 @@ from math import *
 import pandas as pd
 from scipy.fft import fft, ifft, fftfreq
 import MagneticFieldPredictor
+import insert_fake_Bfield
 
 def k(f:float, sigma:float) -> float:
     """ This method calculates the propagation constant for a given layer in the earth.
@@ -194,7 +195,8 @@ def ElectricFieldCalculator(resistivity_data:pd.DataFrame, storm_data:pd.DataFra
                         in IEEE Access, vol. 7, pp. 147029-147037, 2019, doi: 10.1109/ACCESS.2019.2945530.
     """
     log_queue.put("Calcaulating magnetic field...\n")
-    try:
+    try:# FIXME: swap comments to inject real magnegic field data
+        # B_field_data = insert_fake_Bfield.process_intermagnet(r"D:\GitHub\blueeye1_capstone\2003\stormdata20031030-17-24.csv")
         B_field_data = MagneticFieldPredictor.magnetic_field_predictor(storm_data, min_longitude, max_longitude, min_latitude, max_latitude)
     except Exception as e:
         e = str(e)
