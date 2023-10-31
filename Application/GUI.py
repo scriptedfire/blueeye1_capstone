@@ -510,7 +510,7 @@ class App(tk.Tk):
         """ This method loads a grid file in aux format (legacy variable names, older file headers) 
             chosen by the user into state
         """
-        filetypes = (("aux files", "*.aux"),("AUX files", "*.AUX"),)
+        filetypes = (("AUX files", "*.AUX"),("aux files", "*.aux"),)
 
         # open file
         try:

@@ -582,18 +582,11 @@ class Core():
 
         progress_sem.release()
 
-        for branch in updated_branch_data:
-            print(updated_branch_data[(1, 5, 1)]["GICs"])
-            break
-
         # Store to database
         for branch in updated_branch_data:
             for i in range(len(updated_branch_data[branch]["time"])):
                 transaction = self.db_conn.cursor()
                 dpoint_time = datetime.datetime.fromtimestamp(float(updated_branch_data[branch]["time"][i]), tz=timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
-                if(branch == (1, 5, 1)):
-                    print(dpoint_time)
-                    print(updated_branch_data[branch]["GICs"][i])
                 gic = updated_branch_data[branch]["GICs"][i]
                 if(updated_branch_data[branch]["has_trans"]):
                     ttc = updated_branch_data[branch]['warning_time']
