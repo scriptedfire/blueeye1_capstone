@@ -5,6 +5,7 @@ from math import *
 import pandas as pd
 from scipy.fft import fft, ifft, fftfreq
 import MagneticFieldPredictor
+import insert_fake_Bfield
 
 def k(f:float, sigma:float) -> float:
     """ This method calculates the propagation constant for a given layer in the earth.
@@ -176,7 +177,7 @@ def calculate_e_field(conductivity_model:pd.DataFrame, B_field:pd.DataFrame) -> 
                    
     return E_field
 
-def ElectricFieldCalculator(resistivity_data:pd.DataFrame, storm_data:pd.DataFrame, min_longitude:float, max_longitude:float, min_latitude:float, max_latitude:float, log_file:object) -> pd.DataFrame:
+def ElectricFieldCalculator(resistivity_data:pd.DataFrame, storm_data:pd.DataFrame, min_longitude:float, max_longitude:float, min_latitude:float, max_latitude:float, log_queue:object) -> pd.DataFrame:
     """ This method is the parent function that should be called by the Application core.
         @param: resistivity_data: dataframe of the 1-D Earth conductivity
         @param: solar_storm:        solar storm data from NOAA
@@ -184,8 +185,7 @@ def ElectricFieldCalculator(resistivity_data:pd.DataFrame, storm_data:pd.DataFra
         @param: max_longitude: maximum longitude in degrees
         @param: min_latitude: minimum latitude in degrees
         @param: max_latitude: maximum latitude in degrees
-        @param: granularity: the step size between GPS coordinates. This parameter has a strong effect on computation time.
-        @param: log_file: This is the file object for the log file to be appended throughout the file. It is assumed to be open
+        @param: log_queue: queue object to send log messages through
         The above five parameters form a grid where the electric field vector will be calculated for each time point
         
         return: E_field: triple indexed pandas dataframe with electric field vector
@@ -194,28 +194,29 @@ def ElectricFieldCalculator(resistivity_data:pd.DataFrame, storm_data:pd.DataFra
                         Geoelectric Fields Due to Geomagnetic Disturbances: A Test Case," 
                         in IEEE Access, vol. 7, pp. 147029-147037, 2019, doi: 10.1109/ACCESS.2019.2945530.
     """
-    log_file.write("Calcaulating magnetic field...\n")
-    try:
+    log_queue.put("Calcaulating magnetic field...\n")
+    try:# FIXME: swap comments to inject real magnegic field data
+        # B_field_data = insert_fake_Bfield.process_intermagnet(r"D:\GitHub\blueeye1_capstone\2003\stormdata20031030-17-24.csv")
         B_field_data = MagneticFieldPredictor.magnetic_field_predictor(storm_data, min_longitude, max_longitude, min_latitude, max_latitude)
     except Exception as e:
         e = str(e)
-        log_file.write('An Unexpected error occured when attempting to predict the magnetic field\n')
-        log_file.write(e)
-        log_file.write('\n')
+        log_queue.put('An Unexpected error occured when attempting to predict the magnetic field\n')
+        log_queue.put(e)
+        log_queue.put('\n')
         return e
     print('\n',"              Magnetic Field Data\n")
     print(B_field_data, flush=True)
     print('\n')
-    log_file.write("Magnetic field calculation complete.\nCalculating electric field from predicted magnetic field...\n")
+    log_queue.put("Magnetic field calculation complete.\nCalculating electric field from predicted magnetic field...\n")
     try:
         E_Field = calculate_e_field(resistivity_data, B_field_data)
     except Exception as e:
         e = str(e)
-        log_file.write('An Unexpected error occured when attempting to calculate the electric field\n')
-        log_file.write(e)
-        log_file.write('\n')
+        log_queue.put('An Unexpected error occured when attempting to calculate the electric field\n')
+        log_queue.put(e)
+        log_queue.put('\n')
         return e
     
-    log_file.write("Electric Field Calculation complete.\n")
+    log_queue.put("Electric Field Calculation complete.\n")
     return E_Field
 

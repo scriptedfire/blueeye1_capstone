@@ -11,6 +11,8 @@ current_time = datetime.utcnow() # time.gmtime()
 current_time = current_time.strftime("%Y-%m-%d %H:%M:%S UTC")
 print(current_time)
 
+# !!! DEPRECATED !!!
+
 FILE_Path = r"C:\\Users\\steph\\GitHub\\blueeye1_capstone\\Electric Field Calculator"
 # set begin date to pass to NOAA date miner
 begin = current_time #"2023-09-16 00:00:00 UTC"

@@ -1,9 +1,11 @@
 # Misc.
 *.pdf
 *.icloud
-log.txt
+log_*.txt
 state.db
 *.idea
+TTC_log.txt
+Grids
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -112,7 +114,7 @@ celerybeat.pid
 .env
 .venv
 env/
-venv/
+*venv/
 ENV/
 env.bak/
 venv.bak/

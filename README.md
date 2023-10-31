@@ -35,7 +35,18 @@ The purpose of this project is to develop a tool that can assist electrical grid
 
 ### Installing
 
-To use this code, download it from GitHub and execute pip install requirements.txt in your virtual environment.
+To use this code, download it from GitHub and execute pip install -r requirements.txt in your virtual environment.
+Windows instructions:
+1. Clone the repository from GitHub
+2. Open a terminal instance.
+3. Navigate to the blueeye1_capstone directory, execute: python -m venv SWIT-PGvenv
+4. Execute: SWIT-PGvenv\Scripts\activate
+5. Execute: cd Application
+6. Execute: pip install -r requirements.txt
+7. Start Application, execute: python core.py
+8. Upload Sample Finland grid in SampleData directory
+9. Click simulation.
+10. Confirm a time to query NOAA or upload sample storm data in SampleData directory.
 
 
 ## 🔧 Running the tests <a name = "tests"></a>
