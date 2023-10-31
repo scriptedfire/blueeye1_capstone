@@ -470,10 +470,10 @@ class App(tk.Tk):
 
             # create VLEVEL and TTC labels
             if(self.branch_data[branches[i]]["has_trans"]):
-                VLEVEL_label = ttk.Label(self.bus_frame, text="VLEVEL: XXX.X")
+                #VLEVEL_label = ttk.Label(self.bus_frame, text="VLEVEL: XXX.X")
                 #VLEVEL_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
-                self.branch_display_vals[branches[i]]["VLEVEL_label"] = VLEVEL_label
-                current_row += 1
+                #self.branch_display_vals[branches[i]]["VLEVEL_label"] = VLEVEL_label
+                #current_row += 1
 
                 TTC_label = ttk.Label(self.bus_frame, text="Time to Overheat: XXX.X")
                 if(self.sim_running):
@@ -1036,7 +1036,7 @@ class App(tk.Tk):
             filetypes = (("storm data csv files", "*.csv"),)
             storm_file = fdialog.askopenfilename(filetypes=filetypes)
             # stop on cancel hit alternate behavior
-            if(storm_file == ""):
+            if(storm_file == "" or not isinstance(storm_file, str)):
                 return
         # stop on cancel hit on filedialog
         except AttributeError:
@@ -1062,9 +1062,17 @@ class App(tk.Tk):
         self.sim_running = False
         self.sim_thread.join(0.5)
 
-        # TODO: check which view is active before switching
         self.switch_to_sim_not_active_ui()
-        self.destroy_grid_canvas()
+
+        # clear views
+        # TODO: cleanup
+        if(self.sub_view_active):
+            self.destroy_sub_view()
+        if(self.bus_view_active):
+            self.destroy_bus_view()
+        else:
+            self.destroy_grid_canvas()
+
         self.create_grid_canvas()
         self.redraw_grid()
 
@@ -1155,6 +1163,8 @@ class App(tk.Tk):
         messagebox.showinfo("Loaded!", "Simulation has been loaded!")
         # TODO: switch to grid view if not in grid view
 
+        # set temporary max and min gics for loading grid view
+
         # clear any active views other than grid
         if(self.sub_view_active):
             self.destroy_sub_view()
@@ -1190,11 +1200,16 @@ class App(tk.Tk):
             self.max_gic = max(gics)
             self.min_gic = min(gics)
 
+            print(self.max_gic)
+            print(self.min_gic)
+
             # TODO: redo this portion to run more logic for storing current values in cache
 
             for point in time_data:
                 branch_ids = (point[0], point[1], point[2])
                 self.branch_data[branch_ids]["Current_GIC"] = point[5]
+                if(self.branch_data[branch_ids]["has_trans"]):
+                    self.branch_data[branch_ids]["warning_time"] = point[7]
 
             if(self.grid_canvas_active):
                 # update all branch colors
@@ -1219,24 +1234,24 @@ class App(tk.Tk):
 
             elif(self.bus_view_active):
                 # update all labels
-                try:
-                    branches = self.get_branches_for_bus(self.bus_view_bus_num)
-                    for point in time_data:
-                        #self.branch_data[branch_ids]["Current_GIC"] = point[5]
-                        branch_ids = (point[0], point[1], point[2])
-                        if(branch_ids in branches):
-                            labels = self.branch_display_vals[branch_ids]
-                            labels["GIC_label"]["text"] = "GIC: " + str(point[5])
-                            if(self.branch_data[branch_ids]["has_trans"]):
-                                labels["VLEVEL_label"]["text"] = "VLEVEL: " + str(point[6])
-                                labels["TTC_label"]["text"] = "TTC: " + str(point[7])
-                except:
-                    continue
+                #try:
+                branches = self.get_branches_for_bus(self.bus_view_bus_num)
+                for point in time_data:
+                    #self.branch_data[branch_ids]["Current_GIC"] = point[5]
+                    branch_ids = (point[0], point[1], point[2])
+                    if(branch_ids in branches):
+                        labels = self.branch_display_vals[branch_ids]
+                        labels["GIC_label"]["text"] = "GIC: " + str(point[5])
+                        #if(self.branch_data[branch_ids]["has_trans"]):
+                        #    labels["VLEVEL_label"]["text"] = "VLEVEL: " + str(point[6])
+                        #    labels["TTC_label"]["text"] = "TTC: " + str(point[7])
+                #except:
+                #    continue
 
             # update sim time
             sleep(1)
             self.sim_time += timedelta(minutes=1)
-            # TODO: Roll over at sim end time rather than 1 hour constant
+            # TODO: Roll over at sim end time rather than 1 hour constant?
             if(self.sim_time >= (self.start_time + timedelta(minutes=60))):
                 self.sim_time = self.start_time
 
@@ -1472,9 +1487,13 @@ class App(tk.Tk):
             line_id = self.place_wire(from_sub_long, from_sub_lat, to_sub_long, to_sub_lat)
 
             if(self.sim_running):
-                gic = self.branch_data[(ids[2], ids[3], ids[4])]["Current_GIC"]
-                normalized = (gic - self.min_gic) / (self.max_gic - self.min_gic)
-                self.grid_canvas.itemconfig(line_id, fill=self.rgb_hack((int(255 * normalized), 0, int(255 * (1 - normalized)))))
+                # TODO: cleanup
+                try:
+                    gic = self.branch_data[(ids[2], ids[3], ids[4])]["Current_GIC"]
+                    normalized = (gic - self.min_gic) / (self.max_gic - self.min_gic)
+                    self.grid_canvas.itemconfig(line_id, fill=self.rgb_hack((int(255 * normalized), 0, int(255 * (1 - normalized)))))
+                except:
+                    True
 
             # store lines in state so they can be colored during simulation
             self.branch_data[(ids[2], ids[3], ids[4])]["line_id"] = line_id
@@ -1510,12 +1529,6 @@ class App(tk.Tk):
                 except KeyError:
                     self.substations_overlapped_by_sub[subs[i]] = set(subs_without_sub)
 
-        # check how many of the overlapped subs started with coords
-        overlapped_subs_that_started_w_coords = 0
-        #for sub_num in self.substations_overlapped_by_sub:
-        #    if(self.substation_data[sub_num]["started_w_coords"]):
-        #        overlapped_subs_that_started_w_coords += 1
-
         # get rest of diagnostic information
         overlaps_list = []
         overlaps_count = 0
@@ -1526,7 +1539,6 @@ class App(tk.Tk):
 
         # log diagnostic information
         self.core.log_to_file("GUI", "Substations with overlap: " + str(len(self.substations_overlapped_by_sub)))
-        self.core.log_to_file("GUI", "Substations with overlap that started with coordinates: " + str(overlapped_subs_that_started_w_coords))
         self.core.log_to_file("GUI", "Pixels with overlap: " + str(overlaps_count))
         if(len(overlaps_list) > 0):
             self.core.log_to_file("GUI", "Worst overlap: " + str(max(overlaps_list)))

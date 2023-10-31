@@ -56,11 +56,11 @@ class Core():
             # fulfill request
             request = self.requests_queue.pop(0)
             retval = None
-            #try:
-            retval = request["func"](request["params"])
-            #except Exception as e:
-            #    self.log_to_file("Core", "Requested function " + request["func"].__name__ + " exception: " + str(e))
-            #   retval = str(e)
+            try:
+                retval = request["func"](request["params"])
+            except Exception as e:
+                self.log_to_file("Core", "Requested function " + request["func"].__name__ + " exception: " + str(e))
+                retval = str(e)
             request["retval"].append(retval)
             request["event"].set()
 
@@ -324,6 +324,8 @@ class Core():
         grid_name = params["grid_name"]
         timepoint = params["timepoint"]
         utc_timepoint = local_to_utc(timepoint)
+        print(utc_timepoint.timestamp())
+        print(utc_timepoint.strftime("%m/%d/%Y, %H:%M:%S"))
 
         transaction = self.db_conn.cursor()
 
@@ -336,7 +338,7 @@ class Core():
         return data
     
     def calculate_simulation_noaa(self, params):
-        """ This method calculates an hour of datapoints for simulation display
+        """ This method calculates an hour of datapoints for simulation display, with an additional hour on either end to pad the range
             @param: grid_name: The name of the grid for which to calculate datapoints
             @param: start_time: The start time (in user's local timezone) 
             to calculate an hour of datapoints from
@@ -353,6 +355,10 @@ class Core():
             terminate_event = params["terminate_event"]
 
             # TODO: skip all stages if data for given time range is in the database
+
+            # offset inputted start time back one hour to handle issues with poor data at ends of produced time series
+            # and also back one minute to account for an offsetting bug in magnetic field calculator
+            start_time = start_time - timedelta(minutes=61)
 
             # convert start time from local to utc
             local_timezone = datetime.datetime.now().astimezone().tzinfo
@@ -388,15 +394,17 @@ class Core():
             # extract time
             time_data = storm_data["time"].to_numpy(dtype=float)
 
-            # check that the range is greater than one hour
+            # check that the range is greater than three hours hour
+            # TODO: handle magnetic field calculator minute bug
             start_time = datetime.datetime.fromtimestamp(time_data[0], tz=timezone.utc)
             end_time = datetime.datetime.fromtimestamp(time_data[-1], tz=timezone.utc)
-            if(end_time < (start_time + timedelta(minutes=60))):
-                return "Less than one hour of data received from NOAA Storm Dataminer"
+            if(end_time < (start_time + timedelta(minutes=180))):
+                return "Not enough data received from NOAA Storm Dataminer"
 
             # set times for GUI
-            self.app.start_time = utc_to_local(start_time)
-            self.app.sim_time = utc_to_local(start_time)
+            # TODO: truncate seconds
+            self.app.start_time = utc_to_local(start_time + timedelta(minutes=60))
+            self.app.sim_time = utc_to_local(start_time + timedelta(minutes=60))
 
             # notify NOAA stage complete
             progress_sem.release()
@@ -428,16 +436,18 @@ class Core():
 
             # extract time
             time_data = storm_data["time"].to_numpy(dtype=float)
+            print(time_data[1])
 
             # check that the range is greater than one hour
+            # TODO: handle magnetic field calculator minute bug
             start_time = datetime.datetime.fromtimestamp(time_data[0], tz=timezone.utc)
             end_time = datetime.datetime.fromtimestamp(time_data[-1], tz=timezone.utc)
-            if(end_time < (start_time + timedelta(minutes=60))):
-                return "File contains less than one hour of data"
+            if(end_time < (start_time + timedelta(minutes=180))):
+                return "File doesn't contain enough data, at least 3 hours of data is required"
 
             # set times for GUI
-            self.app.start_time = utc_to_local(start_time)
-            self.app.sim_time = utc_to_local(start_time)
+            self.app.start_time = utc_to_local(start_time + timedelta(minutes=60))
+            self.app.sim_time = utc_to_local(start_time + timedelta(minutes=60))
 
             return self.calculate_simulation(grid_name, progress_sem, terminate_event, storm_data)
         except Exception as e:
@@ -572,21 +582,30 @@ class Core():
 
         progress_sem.release()
 
+        for branch in updated_branch_data:
+            print(updated_branch_data[(1, 5, 1)]["GICs"])
+            break
+
         # Store to database
         for branch in updated_branch_data:
             for i in range(len(updated_branch_data[branch]["time"])):
                 transaction = self.db_conn.cursor()
-                dpoint_time = datetime.datetime.fromtimestamp(float(updated_branch_data[branch]["time"][i])).strftime("%m/%d/%Y, %H:%M:%S")
+                dpoint_time = datetime.datetime.fromtimestamp(float(updated_branch_data[branch]["time"][i]), tz=timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
+                if(branch == (1, 5, 1)):
+                    print(dpoint_time)
+                    print(updated_branch_data[branch]["GICs"][i])
                 gic = updated_branch_data[branch]["GICs"][i]
                 if(updated_branch_data[branch]["has_trans"]):
                     ttc = updated_branch_data[branch]['warning_time']
                 transaction.execute("""INSERT INTO Datapoint(FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME,
                     DPOINT_TIME, DPOINT_GIC, DPOINT_VLEVEL, DPOINT_TTC) VALUES(?,?,?,?,?,?,?,?)""",
                     [branch[0], branch[1], branch[2], grid_name, dpoint_time, gic, 0, ttc])
+                # TODO: allow cancelling here
+                self.db_conn.commit()
                 transaction.close()
+                #self.save_to_file()
 
         # TODO: uncomment when overlap is handled
-        #self.save_to_file()
 
     def send_request(self, func, params = None, retval = []):
         """ This method creates a request and sends it down the request queue.
