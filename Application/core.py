@@ -431,7 +431,8 @@ class Core():
             for label in storm_data.columns.values.tolist():
                 if label not in ['Unnamed: 0', "index", 'time', 'speed', 'density', 'Vx', 'Vy', 'Vz', 'Bx', 'By', 'Bz', 'dst']:
                     return "File formatted incorrectly"
-                
+
+            #storm_data = storm_data.dropna()
             storm_data = interpolate_data(storm_data)
 
             # extract time
@@ -589,7 +590,13 @@ class Core():
                 dpoint_time = datetime.datetime.fromtimestamp(float(updated_branch_data[branch]["time"][i]), tz=timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
                 gic = updated_branch_data[branch]["GICs"][i]
                 if(updated_branch_data[branch]["has_trans"]):
-                    ttc = updated_branch_data[branch]['warning_time']
+                    if(updated_branch_data[branch]["warning_time"] != None):
+                        overheat_dt = datetime.datetime.fromtimestamp(float(updated_branch_data[branch]["warning_time"]), tz=timezone.utc)
+                        now_dt = datetime.datetime.fromtimestamp(float(updated_branch_data[branch]["time"][i]), tz=timezone.utc)
+                        ttc = overheat_dt - now_dt
+                        ttc = int(ttc.total_seconds() / 60)
+                    else:
+                        ttc = None
                 transaction.execute("""INSERT INTO Datapoint(FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME,
                     DPOINT_TIME, DPOINT_GIC, DPOINT_VLEVEL, DPOINT_TTC) VALUES(?,?,?,?,?,?,?,?)""",
                     [branch[0], branch[1], branch[2], grid_name, dpoint_time, gic, 0, ttc])

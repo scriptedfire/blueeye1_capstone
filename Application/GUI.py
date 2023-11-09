@@ -704,7 +704,7 @@ class App(tk.Tk):
                 # clear any active views other than grid
                 if(self.sub_view_active):
                     self.destroy_sub_view()
-                if(self.bus_view_active):
+                elif(self.bus_view_active):
                     self.destroy_bus_view()
 
                 # get substation data
@@ -1068,7 +1068,7 @@ class App(tk.Tk):
         # TODO: cleanup
         if(self.sub_view_active):
             self.destroy_sub_view()
-        if(self.bus_view_active):
+        elif(self.bus_view_active):
             self.destroy_bus_view()
         else:
             self.destroy_grid_canvas()
@@ -1161,19 +1161,45 @@ class App(tk.Tk):
         self.loading_text["text"] = "Saving to Database"
         core_event.wait()
         messagebox.showinfo("Loaded!", "Simulation has been loaded!")
-        # TODO: switch to grid view if not in grid view
-
-        # set temporary max and min gics for loading grid view
 
         # clear any active views other than grid
         if(self.sub_view_active):
             self.destroy_sub_view()
             self.create_grid_canvas()
             self.redraw_grid()
-        if(self.bus_view_active):
+        elif(self.bus_view_active):
             self.destroy_bus_view()
             self.create_grid_canvas()
             self.redraw_grid()
+
+        # load first minute of data
+        retval = []
+        core_event = self.core.send_request(self.core.get_data_for_time, {
+            "grid_name" : self.grid_name, "timepoint" : self.sim_time
+        }, retval)
+        core_event.wait()
+        time_data = retval[0]
+
+        # load intial TTCs
+        trans_warnings = {}
+        for point in time_data:
+            branch_ids = (point[0], point[1], point[2])
+            if(self.branch_data[branch_ids]["has_trans"]):
+                ttc = point[7]
+                if(ttc != None):
+                    trans_warnings[branch_ids] = ttc
+
+        # display TTC warning
+        warning_str = ""
+        for branch in trans_warnings:
+            warning_str += self.branch_data[branch]["type"]
+            warning_str += " from "
+            warning_str += self.bus_data[branch[0]]["name"] 
+            warning_str += " to " 
+            warning_str += self.bus_data[branch[1]]["name"]
+            warning_str += " will overheat at " + (self.sim_time + timedelta(minutes=int(trans_warnings[branch]))).strftime("%m/%d/%Y, %H:%M:%S") + "\n\n"
+
+        messagebox.showwarning("transformers overheating", warning_str)
 
         self.switch_to_sim_active_ui()
         self.close_sim_config()
@@ -1242,9 +1268,9 @@ class App(tk.Tk):
                     if(branch_ids in branches):
                         labels = self.branch_display_vals[branch_ids]
                         labels["GIC_label"]["text"] = "GIC: " + str(point[5])
-                        #if(self.branch_data[branch_ids]["has_trans"]):
+                        if(self.branch_data[branch_ids]["has_trans"]):
                         #    labels["VLEVEL_label"]["text"] = "VLEVEL: " + str(point[6])
-                        #    labels["TTC_label"]["text"] = "TTC: " + str(point[7])
+                            labels["TTC_label"]["text"] = "Time to overheat: " + str(point[7])
                 #except:
                 #    continue
 
