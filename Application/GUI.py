@@ -785,9 +785,9 @@ class App(tk.Tk):
                         w2 = None
                         if(trans_configuration == "Unknown"):
                             w1, w2 = estimate_winding_impedance(resistance, R_base_high_side, turns_ratio, True)
-                        elif trans_configuration in ["Gwye - Wye", "Gwye - Delta", "Wye - Delta"]:
+                        elif trans_configuration in ["Gwye - Delta", "Wye - Delta"]:
                             w1 = estimate_winding_impedance(resistance, R_base_high_side, turns_ratio, False)[0]
-                        elif trans_configuration in ["Wye - Gwye", "Delta - Gwye", "Delta - Wye"]:
+                        elif trans_configuration in ["Delta - Gwye", "Delta - Wye"]:
                             w2 = estimate_winding_impedance(resistance, R_base_high_side, turns_ratio, False)[1]
 
                         # set transformer type for GIC Solver
@@ -796,12 +796,9 @@ class App(tk.Tk):
                             trans_type = "auto"
                         elif trans_configuration in ["Gwye - Wye", "Wye - Gwye"]:
                             trans_type = "gy"
-                            # TODO: figure out why GIC solver isn't handling None winding impedance for gy
                             w1, w2 = estimate_winding_impedance(resistance, R_base_high_side, turns_ratio, False)
                         elif trans_configuration in ["Delta - Gwye", "Gwye - Delta", "Delta - Wye", "Wye - Delta"]:
                             trans_type = "gsu"
-                            # TODO: figure out why GIC solver isn't handling None winding impedance for gsu w1
-                            w1, w2 = estimate_winding_impedance(resistance, R_base_high_side, turns_ratio, False)
 
                         temp_branch_data[branch]["trans_w1"] = w1
                         temp_branch_data[branch]["trans_w2"] = w2
@@ -1160,6 +1157,7 @@ class App(tk.Tk):
         self.loading_cancel_btn.state(["disabled"])
         self.loading_text["text"] = "Saving to Database"
         core_event.wait()
+        # TODO: not sure an error during the database stage gets printed, add additional loading stage?
         messagebox.showinfo("Loaded!", "Simulation has been loaded!")
 
         # clear any active views other than grid
@@ -1199,7 +1197,8 @@ class App(tk.Tk):
             warning_str += self.bus_data[branch[1]]["name"]
             warning_str += " will overheat at " + (self.sim_time + timedelta(minutes=int(trans_warnings[branch]))).strftime("%m/%d/%Y, %H:%M:%S") + "\n\n"
 
-        messagebox.showwarning("transformers overheating", warning_str)
+        if not(warning_str == ""):
+            messagebox.showwarning("transformers overheating", warning_str)
 
         self.switch_to_sim_active_ui()
         self.close_sim_config()
@@ -1219,6 +1218,7 @@ class App(tk.Tk):
             core_event.wait()
             time_data = retval[0]
 
+            # TODO: use abs value of gics for color display
             gics = []
             for point in time_data:
                 gics.append(point[5])
@@ -1379,6 +1379,7 @@ class App(tk.Tk):
             @param: bus_num: The bus for which to get branches
             return: branch_tuples: List of tuples that represent the branches attached to the given bus
         """
+        # TODO: pass whether or not a branch is inverted for displaying sign correctly in bus view
         branch_tuples = []
         for branch_tuple in self.branch_data:
             if(branch_tuple[0] == bus_num or branch_tuple[1] == bus_num):
@@ -1515,6 +1516,7 @@ class App(tk.Tk):
             if(self.sim_running):
                 # TODO: cleanup
                 try:
+                    # TODO: use abs value of gic for color display
                     gic = self.branch_data[(ids[2], ids[3], ids[4])]["Current_GIC"]
                     normalized = (gic - self.min_gic) / (self.max_gic - self.min_gic)
                     self.grid_canvas.itemconfig(line_id, fill=self.rgb_hack((int(255 * normalized), 0, int(255 * (1 - normalized)))))
