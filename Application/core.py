@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 from time import sleep
 from multiprocessing import Process, Queue
+import hashlib
 from GUI import App
 from NOAASolarStormDataMiner import data_scraper, interpolate_data
 from ElectricFieldPredictor import ElectricFieldCalculator
@@ -159,7 +160,6 @@ class Core():
         GRID_NAME text NOT NULL,
         DPOINT_TIME text NOT NULL,
         DPOINT_GIC real NOT NULL,
-        DPOINT_VLEVEL real,
         DPOINT_TTC real,
         PRIMARY KEY (DPOINT_TIME, FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME),
         FOREIGN KEY (FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME) REFERENCES Branch (FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME)
@@ -380,9 +380,10 @@ class Core():
             # extract data and return error if any
             storm_data = None
             data_invalid = None
-            if(len(results["retval"]) == 2):
+            if not isinstance(results["retval"], str):
                 storm_data = results["retval"][0]
                 data_invalid = results["retval"][1]
+                storm_file = results["retval"][2]
             else:
                 self.log_to_file("Core", "data_scraper returned an error: " + results["retval"])
                 return "data_scraper returned an error: " + results["retval"]
@@ -390,6 +391,10 @@ class Core():
             # return if data is flagged invalid
             if data_invalid:
                 return "Invalid data received from NOAA Storm Dataminer"
+            
+            # TODO: get checksum and check if sim data already exists
+            print(storm_file)
+            print(file_chksm(storm_file))
 
             # extract time
             time_data = storm_data["time"].to_numpy(dtype=float)
@@ -426,6 +431,7 @@ class Core():
             progress_sem.release()
 
             storm_data = pd.read_csv(storm_file)
+            print(file_chksm(storm_file))
 
             for label in storm_data.columns.values.tolist():
                 if label not in ['Unnamed: 0', "index", 'time', 'speed', 'density', 'Vx', 'Vy', 'Vz', 'Bx', 'By', 'Bz', 'dst']:
@@ -483,16 +489,14 @@ class Core():
 
                 has_trans = branch[4]
                 gic = randrange(0, 999)
-                vlevel = None
                 ttc = None
 
                 if(has_trans != 0):
-                    vlevel = randrange(0, 999)
                     ttc = randrange(0, 999)
 
                 transaction.execute("""INSERT INTO Datapoint(FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME,
-                DPOINT_TIME, DPOINT_GIC, DPOINT_VLEVEL, DPOINT_TTC) VALUES(?,?,?,?,?,?,?,?)""",
-                [from_bus, to_bus, circuit, grid_name, dpoint_time, gic, vlevel, ttc])
+                DPOINT_TIME, DPOINT_GIC, DPOINT_TTC) VALUES(?,?,?,?,?,?,?)""",
+                [from_bus, to_bus, circuit, grid_name, dpoint_time, gic, ttc])
 
                 self.db_conn.commit()
 
@@ -604,8 +608,8 @@ class Core():
 
                 # insert data
                 transaction.execute("""INSERT INTO Datapoint(FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME,
-                    DPOINT_TIME, DPOINT_GIC, DPOINT_VLEVEL, DPOINT_TTC) VALUES(?,?,?,?,?,?,?,?)""",
-                    [branch[0], branch[1], branch[2], grid_name, dpoint_time, gic, 0, ttc])
+                    DPOINT_TIME, DPOINT_GIC, DPOINT_TTC) VALUES(?,?,?,?,?,?,?)""",
+                    [branch[0], branch[1], branch[2], grid_name, dpoint_time, gic, ttc])
                 # TODO: allow cancelling here
                 self.db_conn.commit()
                 transaction.close()
@@ -736,6 +740,11 @@ def local_to_utc(time_val):
 def utc_to_local(time_val):
     local_timezone = datetime.datetime.now().astimezone().tzinfo
     return time_val.replace(tzinfo=timezone.utc).astimezone(local_timezone)
+
+def file_chksm(filename):
+    with open(filename, "rb") as storm_file:
+        file_bytes = storm_file.read()
+        return hashlib.sha256(file_bytes).hexdigest()
 
 if __name__ == "__main__":
     core = Core()

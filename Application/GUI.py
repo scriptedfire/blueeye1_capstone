@@ -557,7 +557,6 @@ class App(tk.Tk):
                                 accumulator += c
                                 if(accumulator == "//"):
                                     accumulator = ""
-                                    previous_parser_state = "waiting"
                                     parser_state = "ignore_line"
                                 continue
 
@@ -767,7 +766,7 @@ class App(tk.Tk):
                         temp_branch_data[(int(line["BusNumFrom"]), int(line["BusNumTo"]), int(line["Circuit"]))] = {
                             "has_trans" : (line["BranchDeviceType"] == "Transformer"), "resistance": resistance,
                             "type": None, "trans_w1": None, "trans_w2": None, "GIC_BD": False, "Current_GIC" : 0.0
-                        }
+                        } # TODO: use (line["SeriesCap"] == "YES") for GIC_BD
                 except KeyError:
                     messagebox.showerror("file load error", "Transformer data missing")
                     if(self.grid_name != ""):
@@ -1193,7 +1192,7 @@ class App(tk.Tk):
         for point in time_data:
             branch_ids = (point[0], point[1], point[2])
             if(self.branch_data[branch_ids]["has_trans"]):
-                ttc = point[7]
+                ttc = point[6]
                 if(ttc != None):
                     trans_warnings[branch_ids] = ttc
 
@@ -1242,8 +1241,7 @@ class App(tk.Tk):
                 branch_ids = (point[0], point[1], point[2])
                 self.branch_data[branch_ids]["Current_GIC"] = round(point[5], 3)
                 if(self.branch_data[branch_ids]["has_trans"]):
-                    # TODO: fix index when VLEVEL gets removed fully
-                    self.branch_data[branch_ids]["warning_time"] = point[7]
+                    self.branch_data[branch_ids]["warning_time"] = point[6]
                 gic = point[5]
                 # normalize gic
                 normalized = (gic - self.min_gic) / (self.max_gic - self.min_gic)
@@ -1277,6 +1275,7 @@ class App(tk.Tk):
                             labels["TTC_label"]["text"] = "Time to overheat: N/A" if (ttc == None) else "Time to overheat: " + str(ttc) + " minutes"
 
             # update sim time
+            # TODO: busy sleep for responsiveness
             sleep(1)
             self.sim_time += timedelta(minutes=1)
             if(self.sim_time >= (self.start_time + timedelta(minutes=60))):
