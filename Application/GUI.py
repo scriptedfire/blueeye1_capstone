@@ -104,6 +104,7 @@ class App(tk.Tk):
         """
         if(self.sim_running):
             self.sim_running = False
+            self.sim_unpause.set()
             self.sim_thread.join(0.5)
 
         self.quit()
@@ -363,7 +364,7 @@ class App(tk.Tk):
         for sub_num in sub_nums:
             # create label for substations
             sub_name = self.substation_data[sub_num]["name"]
-            sub_label_text = "Substation " + (sub_name if not(sub_name == "") else str(sub_num)) + ":"
+            sub_label_text = "Buses at Substation " + (sub_name if not(sub_name == "") else str(sub_num)) + ":"
             sub_label = ttk.Label(self.sub_frame, text=sub_label_text)
             sub_label.grid(column=0, row=current_row, sticky=(N,W), pady=8)
             self.sub_labels.append(sub_label)
@@ -425,7 +426,7 @@ class App(tk.Tk):
         # create bus label
         bus_name = self.bus_data[bus_num]["name"]
         bus_label_text = bus_name if not(bus_name == "") else str(bus_num)
-        self.bus_label = ttk.Label(self.bus_frame, text="Bus " + bus_label_text + ":")
+        self.bus_label = ttk.Label(self.bus_frame, text="Branches From Bus " + bus_label_text + ":")
         self.bus_label.grid(column=0, row=1, sticky=(N,W), padx=4, pady=8)
 
         self.branch_display_vals = {}
@@ -459,29 +460,35 @@ class App(tk.Tk):
                 self.branch_display_vals[branches[i]]["type_label"] = type_label
                 current_row += 1
 
-            # TODO: Load initial values for these labels from state to handle simulation pausing
             # create GIC label
-            GIC_label = ttk.Label(self.bus_frame, text="GIC: XXX.X")
-            if(self.sim_running):
-                GIC_label["text"] = "GIC: " + str(self.branch_data[branches[i]]["Current_GIC"])
+            GIC_label = ttk.Label(self.bus_frame, text="GIC: XXX.XXX A" if not(self.sim_running)
+                                  else "GIC: " + str(self.branch_data[branches[i]]["Current_GIC"]) + " A")
             GIC_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
             self.branch_display_vals[branches[i]]["GIC_label"] = GIC_label
             current_row += 1
 
-            # create VLEVEL and TTC labels
+            # create TTC label
             if(self.branch_data[branches[i]]["has_trans"]):
-                #VLEVEL_label = ttk.Label(self.bus_frame, text="VLEVEL: XXX.X")
-                #VLEVEL_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
-                #self.branch_display_vals[branches[i]]["VLEVEL_label"] = VLEVEL_label
-                #current_row += 1
-
-                TTC_label = ttk.Label(self.bus_frame, text="Time to Overheat: XXX.X")
-                if(self.sim_running):
-                    TTC_label["text"] = "Time to Overheat: " + str(self.branch_data[branches[i]]["warning_time"])
+                TTC_label = ttk.Label(self.bus_frame, 
+                                      text="Time to Overheat: N/A" if not(self.sim_running) 
+                                      or (self.branch_data[branches[i]]["warning_time"] == None)
+                                      else "Time to Overheat: " + str(self.branch_data[branches[i]]["warning_time"]) + " minutes")
                 TTC_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
                 self.branch_display_vals[branches[i]]["TTC_label"] = TTC_label
+                current_row += 1
+            else:
+                current_row += 2
 
-            current_column += 1
+            # create horizontal divider
+            horiz_divider_label = ttk.Label(self.bus_frame, text="")
+            horiz_divider_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
+
+            # create vertical dividers
+            for i in range(5):
+                vert_divider_label = ttk.Label(self.bus_frame, text="|")
+                vert_divider_label.grid(column=current_column + 1, row=current_row - i, sticky=(N,W), padx=4)
+
+            current_column += 2
 
         # create back button
         self.back_to_sub_btn = ttk.Button(self.body, text="Back", command=self.back_to_sub(sub_nums))
@@ -518,7 +525,7 @@ class App(tk.Tk):
                 f_str = grid_file.read()
 
                 # detect whether or not legacy headers are in use
-                # TODO: support legacy headers?
+                # TODO: unsupport legacy headers?
                 legacy_headers = False
                 if "DATA (" in f_str:
                     legacy_headers = True
@@ -1020,7 +1027,8 @@ class App(tk.Tk):
         self.sim_time = set_start_time
 
         # initialize simulation pause event
-        self.sim_pause = Event()
+        self.sim_unpause = Event()
+        self.sim_unpause.set()
 
         # start simulation loop
         self.sim_running = True
@@ -1040,7 +1048,8 @@ class App(tk.Tk):
             return
 
         # initialize simulation pause event
-        self.sim_pause = Event()
+        self.sim_unpause = Event()
+        self.sim_unpause.set()
 
         # start simulation loop
         self.sim_running = True
@@ -1057,6 +1066,7 @@ class App(tk.Tk):
     def stop_sim(self, *args):
         # kill simulation loop
         self.sim_running = False
+        self.sim_unpause.set()
         self.sim_thread.join(0.5)
 
         self.switch_to_sim_not_active_ui()
@@ -1074,10 +1084,10 @@ class App(tk.Tk):
         self.redraw_grid()
 
     def pause_sim(self, *args):
-        self.sim_pause.set()
+        self.sim_unpause.clear()
 
     def resume_sim(self, *args):
-        self.sim_pause.clear()
+        self.sim_unpause.set()
 
     def cancel_simulation_calculations(self, *args):
         """ This method cancels currently running simulation
@@ -1204,9 +1214,6 @@ class App(tk.Tk):
         self.close_sim_config()
 
         while(self.sim_running):
-            if(self.sim_pause.is_set()):
-                continue
-            
             # update time label
             self.time_label["text"] = "Time In Simulation: " + self.sim_time.strftime("%m/%d/%Y, %H:%M:%S")
 
@@ -1233,26 +1240,25 @@ class App(tk.Tk):
 
             for point in time_data:
                 branch_ids = (point[0], point[1], point[2])
-                self.branch_data[branch_ids]["Current_GIC"] = point[5]
+                self.branch_data[branch_ids]["Current_GIC"] = round(point[5], 3)
                 if(self.branch_data[branch_ids]["has_trans"]):
+                    # TODO: fix index when VLEVEL gets removed fully
                     self.branch_data[branch_ids]["warning_time"] = point[7]
+                gic = point[5]
+                # normalize gic
+                normalized = (gic - self.min_gic) / (self.max_gic - self.min_gic)
+                self.branch_data[branch_ids]["display_color"] = self.rgb_hack((int(255 * normalized), 0, int(255 * (1 - normalized))))
+
 
             if(self.grid_canvas_active):
                 # update all branch colors
                 for point in time_data:
                     try:
                         branch_ids = (point[0], point[1], point[2])
-                        #self.branch_data[branch_ids]["Current_GIC"] = point[5]
                         branch = self.branch_data[branch_ids]
                         try:
                             line_id = branch["line_id"]
-                            gic = point[5]
-
-                            # normalize gic
-                            normalized = (gic - self.min_gic) / (self.max_gic - self.min_gic)
-
-                            # red is max gic, blue is min gic
-                            self.grid_canvas.itemconfig(line_id, fill=self.rgb_hack((int(255 * normalized), 0, int(255 * (1 - normalized)))))
+                            self.grid_canvas.itemconfig(line_id, fill=branch["display_color"])
                         except KeyError:
                             continue
                     except:
@@ -1260,26 +1266,24 @@ class App(tk.Tk):
 
             elif(self.bus_view_active):
                 # update all labels
-                #try:
                 branches = self.get_branches_for_bus(self.bus_view_bus_num)
                 for point in time_data:
-                    #self.branch_data[branch_ids]["Current_GIC"] = point[5]
                     branch_ids = (point[0], point[1], point[2])
                     if(branch_ids in branches):
                         labels = self.branch_display_vals[branch_ids]
-                        labels["GIC_label"]["text"] = "GIC: " + str(point[5])
+                        labels["GIC_label"]["text"] = "GIC: " + str(self.branch_data[branch_ids]["Current_GIC"]) + " A"
                         if(self.branch_data[branch_ids]["has_trans"]):
-                        #    labels["VLEVEL_label"]["text"] = "VLEVEL: " + str(point[6])
-                            labels["TTC_label"]["text"] = "Time to overheat: " + str(point[7])
-                #except:
-                #    continue
+                            ttc = self.branch_data[branch_ids]["warning_time"]
+                            labels["TTC_label"]["text"] = "Time to overheat: N/A" if (ttc == None) else "Time to overheat: " + str(ttc) + " minutes"
 
             # update sim time
             sleep(1)
             self.sim_time += timedelta(minutes=1)
-            # TODO: Roll over at sim end time rather than 1 hour constant?
             if(self.sim_time >= (self.start_time + timedelta(minutes=60))):
                 self.sim_time = self.start_time
+
+            # block here if sim is paused
+            self.sim_unpause.wait()
 
     ########################
     # Conversion Functions #
@@ -1409,32 +1413,33 @@ class App(tk.Tk):
 
         return rect_id
 
-    def place_wire(self, from_long, from_lat, to_long, to_lat):
+    def place_wire(self, from_long, from_lat, to_long, to_lat, color=None):
         # convert lat/long to x/y
         from_x_val = self.long_to_x(from_long)
         from_y_val = self.lat_to_y(from_lat)
         to_x_val = self.long_to_x(to_long)
         to_y_val = self.lat_to_y(to_lat)
+        color = color if not(color == None) else "blue"
 
         # connect bus squares at corners
         if from_x_val < to_x_val and from_y_val < to_y_val:
-            return self.grid_canvas.create_line(from_x_val + self.sq_size, from_y_val + self.sq_size, to_x_val, to_y_val, fill="blue", width=2)
+            return self.grid_canvas.create_line(from_x_val + self.sq_size, from_y_val + self.sq_size, to_x_val, to_y_val, fill=color, width=2)
         elif from_x_val > to_x_val and from_y_val > to_y_val:
-            return self.grid_canvas.create_line(from_x_val, from_y_val, to_x_val + self.sq_size, to_y_val + self.sq_size, fill="blue", width=2)
+            return self.grid_canvas.create_line(from_x_val, from_y_val, to_x_val + self.sq_size, to_y_val + self.sq_size, fill=color, width=2)
         elif from_x_val < to_x_val and from_y_val > to_y_val:
-            return self.grid_canvas.create_line(from_x_val + self.sq_size, from_y_val, to_x_val, to_y_val + self.sq_size, fill="blue", width=2)
+            return self.grid_canvas.create_line(from_x_val + self.sq_size, from_y_val, to_x_val, to_y_val + self.sq_size, fill=color, width=2)
         elif from_x_val > to_x_val and from_y_val < to_y_val:
-            return self.grid_canvas.create_line(from_x_val, from_y_val + self.sq_size, to_x_val + self.sq_size, to_y_val, fill="blue", width=2)
+            return self.grid_canvas.create_line(from_x_val, from_y_val + self.sq_size, to_x_val + self.sq_size, to_y_val, fill=color, width=2)
         
         # connect bus squares at sides if on the same axis
         elif from_x_val == to_x_val and from_y_val < to_y_val:
-            return self.grid_canvas.create_line(from_x_val + (self.sq_size / 2), from_y_val + self.sq_size, to_x_val + (self.sq_size / 2), to_y_val, fill="blue", width=2)
+            return self.grid_canvas.create_line(from_x_val + (self.sq_size / 2), from_y_val + self.sq_size, to_x_val + (self.sq_size / 2), to_y_val, fill=color, width=2)
         elif from_x_val == to_x_val and from_y_val > to_y_val:
-            return self.grid_canvas.create_line(from_x_val + (self.sq_size / 2), from_y_val, to_x_val + (self.sq_size / 2), to_y_val + self.sq_size, fill="blue", width=2)
+            return self.grid_canvas.create_line(from_x_val + (self.sq_size / 2), from_y_val, to_x_val + (self.sq_size / 2), to_y_val + self.sq_size, fill=color, width=2)
         elif from_x_val < to_x_val and from_y_val == to_y_val:
-            return self.grid_canvas.create_line(from_x_val + self.sq_size, from_y_val + (self.sq_size / 2), to_x_val, to_y_val + (self.sq_size / 2), fill="blue", width=2)
+            return self.grid_canvas.create_line(from_x_val + self.sq_size, from_y_val + (self.sq_size / 2), to_x_val, to_y_val + (self.sq_size / 2), fill=color, width=2)
         elif from_x_val > to_x_val and from_y_val == to_y_val:
-            return self.grid_canvas.create_line(from_x_val, from_y_val + (self.sq_size / 2), to_x_val + self.sq_size, to_y_val + (self.sq_size / 2), fill="blue", width=2)
+            return self.grid_canvas.create_line(from_x_val, from_y_val + (self.sq_size / 2), to_x_val + self.sq_size, to_y_val + (self.sq_size / 2), fill=color, width=2)
         
         else:
             self.core.log_to_file("GUI", "Strange values in place wire: " + str(from_x_val) + " " + str(to_x_val) + " "
@@ -1510,18 +1515,12 @@ class App(tk.Tk):
             to_sub_long = to_sub["long"]
 
             # draw
-            # TODO: initialize line with simulation colors if sim running
-            line_id = self.place_wire(from_sub_long, from_sub_lat, to_sub_long, to_sub_lat)
-
-            if(self.sim_running):
-                # TODO: cleanup
-                try:
-                    # TODO: use abs value of gic for color display
-                    gic = self.branch_data[(ids[2], ids[3], ids[4])]["Current_GIC"]
-                    normalized = (gic - self.min_gic) / (self.max_gic - self.min_gic)
-                    self.grid_canvas.itemconfig(line_id, fill=self.rgb_hack((int(255 * normalized), 0, int(255 * (1 - normalized)))))
-                except:
-                    True
+            line_id = None
+            if not(self.sim_running):
+                line_id = self.place_wire(from_sub_long, from_sub_lat, to_sub_long, to_sub_lat)
+            else:
+                line_id = self.place_wire(from_sub_long, from_sub_lat, to_sub_long, to_sub_lat, 
+                                          color=self.branch_data[(ids[2], ids[3], ids[4])]["display_color"])
 
             # store lines in state so they can be colored during simulation
             self.branch_data[(ids[2], ids[3], ids[4])]["line_id"] = line_id
