@@ -346,12 +346,21 @@ def equivalent_current_calc(line_data: list, IV_df: pd.DataFrame) -> pd.DataFram
             # attempt 2: resistance unaltered - unsuccessful
             # attempt 3: resistance doubled, current therefore halved - successful for northward only e-field
             # Doubling resistance doesn't work for eastward only e-field; cause of issue unclear
+<<<<<<< HEAD
             resistance = line['resistance'] * 2
+=======
+            # attempt 4: found bug within conductance matrix generation, original idea correct
+            resistance = line['resistance'] + 1e6
+>>>>>>> c96edec (Relocate GIC solver.)
         else:
             resistance = line['resistance']
+
         indexer = line['tuple']
+
         # another variable for indexing, DataFrame was behaving strangely when just using line_tuple
-        EC_data[line_tuple] = (3 * IV_df[indexer]) / resistance
+
+        current = (3 * IV_df[indexer]) / resistance
+        EC_data[line_tuple] = current
         # I = V / R, adjusted from 3 phase value
 
     # converting to DataFrame
@@ -504,6 +513,7 @@ def generate_nodes_and_network(branch_data: dict, bus_data: dict, substation_dat
         elif not data["has_trans"]:
             # this process is used for identifying nodes/buses transmission lines are connected to
             # transmission line is accounted for at from and to buses
+<<<<<<< HEAD
             try:
                 nodes[W1_side].append((element, "line", branch_data[element]['resistance'] / 3))
             except KeyError:
@@ -512,6 +522,26 @@ def generate_nodes_and_network(branch_data: dict, bus_data: dict, substation_dat
                 nodes[W2_side].append((element, "line", branch_data[element]['resistance'] / 3))
             except KeyError:
                 nodes[W2_side] = [(element, "line", branch_data[element]['resistance'] / 3)]
+=======
+            if branch_data[element]['GIC_BD']:
+                try:
+                    nodes[W1_side].append((element, "line", (branch_data[element]['resistance'] + 1e6) / 3))
+                except KeyError:
+                    nodes[W1_side] = [(element, "line", (branch_data[element]['resistance'] + 1e6) / 3)]
+                try:
+                    nodes[W2_side].append((element, "line", (branch_data[element]['resistance'] + 1e6) / 3))
+                except KeyError:
+                    nodes[W2_side] = [(element, "line", (branch_data[element]['resistance'] + 1e6) / 3)]
+            else:
+                try:
+                    nodes[W1_side].append((element, "line", branch_data[element]['resistance'] / 3))
+                except KeyError:
+                    nodes[W1_side] = [(element, "line", branch_data[element]['resistance'] / 3)]
+                try:
+                    nodes[W2_side].append((element, "line", branch_data[element]['resistance'] / 3))
+                except KeyError:
+                    nodes[W2_side] = [(element, "line", branch_data[element]['resistance'] / 3)]
+>>>>>>> c96edec (Relocate GIC solver.)
 
     # method to account for when gys and autos are in parallel
     auto_and_gy = []
@@ -654,7 +684,6 @@ def reverse_map_nodes(nodes: dict, nodal_index: dict, branch_data: dict) -> dict
             # this case is typical of a substation connected to gy special case node
             total_res = values[0][2]
             grouped_dict[key].append(("total resistance", total_res))
-
     return grouped_dict
 
 
@@ -772,7 +801,10 @@ def ic_mat_generator_gic_df(nodal_index: dict, EC_df: pd.DataFrame,
                 gic_data[marker].append(info)
         ic_matrix = np.zeros((len(nodal_index), 1))
         # clearing ic_matrix again
+<<<<<<< HEAD
     gic_df = pd.DataFrame(gic_data)
+=======
+>>>>>>> c96edec (Relocate GIC solver.)
     return gic_data
 
 
@@ -986,9 +1018,9 @@ def gic_computation(substation_data: dict, bus_data: dict, branch_data: dict, E_
     nodal_index = nodal_indexer(nodes)
     reverse_mapping = reverse_map_nodes(nodes, nodal_index, branch_data)
     cond_mat = cond_mat_generator(nodal_index, reverse_mapping)
-    gic_df = ic_mat_generator_gic_df(nodal_index, EC_df, reverse_mapping, cond_mat, branch_data)
+    gic_data = ic_mat_generator_gic_df(nodal_index, EC_df, reverse_mapping, cond_mat, branch_data)
 
-    return gic_df
+    return gic_data
 
 
 if __name__ == '__main__':
@@ -1016,6 +1048,7 @@ if __name__ == '__main__':
     # east [-190.04, -125.10, -41.01, -24.39, -125.97, -22.99, -7.26, 44.32, -40.47, 15.67, -6.13, -124.58, -6.546]
 
 
+<<<<<<< HEAD
     # get empty dataframe
     # data = make3DPandas.get3D(-88, -80, 32, 35)
     #
@@ -1037,3 +1070,28 @@ if __name__ == '__main__':
     # gic_df_20N = gic_computation(substation_data_20, bus_data_20, branch_data_20, data)
 
     # print(gic_df_20N)
+=======
+    # # get empty dataframe
+    # data = make3DPandas.get3D(-88, -80, 32, 35)
+    # #
+    # # # example of how to access the dataframe
+    # # # time = 0
+    # # # longitude = 89
+    # # # latitude = 45
+    # # # # NOTE: pandas keys must be a string so use str()
+    # # # data.loc[(str(time), str(longitude), str(latitude)), 'Ex'] = 1
+    # #
+    # # # This is an example of how to populate the dataframe or traverse it
+    # for i in data.iterrows():
+    # #     # i is a pandas object with some metadata. It looks something like name: (10, 89, 45), dtype:float64
+    # #     # we just want the tuple, so we must use i[0] in .loc instead of just i
+    #     data.loc[i[0], "Ex"] = 1
+    #     data.loc[i[0], "Ey"] = 0
+    # #
+    # #
+    # gic_df_20N = gic_computation(substation_data_20, bus_data_20, branch_data_20, data)
+    #
+    # gic_rounded = gic_df_20N.round(2)
+    #
+    # print(gic_rounded)
+>>>>>>> c96edec (Relocate GIC solver.)
