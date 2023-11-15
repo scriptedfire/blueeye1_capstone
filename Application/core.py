@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 from time import sleep
 from multiprocessing import Process, Queue
+import hashlib
 from GUI import App
 from NOAASolarStormDataMiner import data_scraper, interpolate_data
 from ElectricFieldPredictor import ElectricFieldCalculator
@@ -159,7 +160,6 @@ class Core():
         GRID_NAME text NOT NULL,
         DPOINT_TIME text NOT NULL,
         DPOINT_GIC real NOT NULL,
-        DPOINT_VLEVEL real,
         DPOINT_TTC real,
         PRIMARY KEY (DPOINT_TIME, FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME),
         FOREIGN KEY (FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME) REFERENCES Branch (FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME)
@@ -380,9 +380,10 @@ class Core():
             # extract data and return error if any
             storm_data = None
             data_invalid = None
-            if(len(results["retval"]) == 2):
+            if not isinstance(results["retval"], str):
                 storm_data = results["retval"][0]
                 data_invalid = results["retval"][1]
+                storm_file = results["retval"][2]
             else:
                 self.log_to_file("Core", "data_scraper returned an error: " + results["retval"])
                 return "data_scraper returned an error: " + results["retval"]
@@ -390,12 +391,15 @@ class Core():
             # return if data is flagged invalid
             if data_invalid:
                 return "Invalid data received from NOAA Storm Dataminer"
+            
+            # TODO: get checksum and check if sim data already exists
+            print(storm_file)
+            print(file_chksm(storm_file))
 
             # extract time
             time_data = storm_data["time"].to_numpy(dtype=float)
 
-            # check that the range is greater than three hours hour
-            # TODO: handle magnetic field calculator minute bug
+            # check that the range is greater than three hours
             start_time = datetime.datetime.fromtimestamp(time_data[0], tz=timezone.utc)
             end_time = datetime.datetime.fromtimestamp(time_data[-1], tz=timezone.utc)
             if(end_time < (start_time + timedelta(minutes=180))):
@@ -427,6 +431,7 @@ class Core():
             progress_sem.release()
 
             storm_data = pd.read_csv(storm_file)
+            print(file_chksm(storm_file))
 
             for label in storm_data.columns.values.tolist():
                 if label not in ['Unnamed: 0', "index", 'time', 'speed', 'density', 'Vx', 'Vy', 'Vz', 'Bx', 'By', 'Bz', 'dst']:
@@ -439,8 +444,7 @@ class Core():
             time_data = storm_data["time"].to_numpy(dtype=float)
             print(time_data[1])
 
-            # check that the range is greater than one hour
-            # TODO: handle magnetic field calculator minute bug
+            # check that the range is greater than three hours
             start_time = datetime.datetime.fromtimestamp(time_data[0], tz=timezone.utc)
             end_time = datetime.datetime.fromtimestamp(time_data[-1], tz=timezone.utc)
             if(end_time < (start_time + timedelta(minutes=180))):
@@ -485,16 +489,14 @@ class Core():
 
                 has_trans = branch[4]
                 gic = randrange(0, 999)
-                vlevel = None
                 ttc = None
 
                 if(has_trans != 0):
-                    vlevel = randrange(0, 999)
                     ttc = randrange(0, 999)
 
                 transaction.execute("""INSERT INTO Datapoint(FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME,
-                DPOINT_TIME, DPOINT_GIC, DPOINT_VLEVEL, DPOINT_TTC) VALUES(?,?,?,?,?,?,?,?)""",
-                [from_bus, to_bus, circuit, grid_name, dpoint_time, gic, vlevel, ttc])
+                DPOINT_TIME, DPOINT_GIC, DPOINT_TTC) VALUES(?,?,?,?,?,?,?)""",
+                [from_bus, to_bus, circuit, grid_name, dpoint_time, gic, ttc])
 
                 self.db_conn.commit()
 
@@ -541,10 +543,12 @@ class Core():
         # notify E field stage complete
         progress_sem.release()
 
-        # TODO: check for error from subsystem
         # GIC Solver
-        gic_df = self.execute_process(wrap_gic_computation, {"substation_data" : self.app.substation_data, "bus_data" : self.app.bus_data, "branch_data" : self.app.branch_data,
+        gic_data = self.execute_process(wrap_gic_computation, {"substation_data" : self.app.substation_data, "bus_data" : self.app.bus_data, "branch_data" : self.app.branch_data,
         "E_field" : E_field}, terminate_event)["retval"]
+        if isinstance(gic_data, str):
+            self.log_to_file("Core", "gic_computation returned an error: " + gic_data)
+            return "gic_computation returned an error: " + gic_data
 
         if terminate_event.is_set():
             return "Termination event set"
@@ -552,31 +556,32 @@ class Core():
         # work around due to some keys in gic_data being str
         # only solution is to convert all keys to str
         non_str_keys = []
-        for part in gic_df:
+        for part in gic_data:
             if not isinstance(part, str):
                 non_str_keys.append(part)
 
         for part in non_str_keys:
-            gic_df[str(part)] = gic_df[part]
+            gic_data[str(part)] = gic_data[part]
 
         for branch in self.app.branch_data:
-            self.app.branch_data[branch]["time"] = np.array(gic_df["time"])
-            self.app.branch_data[branch]["GICs"] = np.abs(np.array(gic_df[str(branch)]))
+            self.app.branch_data[branch]["time"] = np.array(gic_data["time"])
+            self.app.branch_data[branch]["GICs"] = np.array(gic_data[str(branch)])
 
         if terminate_event.is_set():
             return "Termination event set"
 
         progress_sem.release()
 
-        # TODO: check for error from subsystem
         # TTC
         updated_branch_data = self.execute_process(transformer_thermal_capacity, self.app.branch_data, terminate_event)["retval"]
+        if isinstance(updated_branch_data, str):
+            self.log_to_file("Core", "transformer_thermal_capacity returned an error: " + updated_branch_data)
+            return "transformer_thermal_capacity returned an error: " + updated_branch_data
+
         if terminate_event.is_set():
             return "Termination event set"
+        
         self.app.branch_data = updated_branch_data
-        #for branch in updated_branch_data:
-            #if(updated_branch_data[branch]["has_trans"]):
-                #print(branch, ": ", updated_branch_data[branch]['warning_time'])
 
         if terminate_event.is_set():
             return "Termination event set"
@@ -584,22 +589,27 @@ class Core():
         progress_sem.release()
 
         # Store to database
-        for branch in updated_branch_data:
-            for i in range(len(updated_branch_data[branch]["time"])):
+        for branch in self.app.branch_data:
+            for i in range(len(self.app.branch_data[branch]["time"])):
+                # begin transaction
                 transaction = self.db_conn.cursor()
-                dpoint_time = datetime.datetime.fromtimestamp(float(updated_branch_data[branch]["time"][i]), tz=timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
-                gic = updated_branch_data[branch]["GICs"][i]
-                if(updated_branch_data[branch]["has_trans"]):
-                    if(updated_branch_data[branch]["warning_time"] != None):
-                        overheat_dt = datetime.datetime.fromtimestamp(float(updated_branch_data[branch]["warning_time"]), tz=timezone.utc)
-                        now_dt = datetime.datetime.fromtimestamp(float(updated_branch_data[branch]["time"][i]), tz=timezone.utc)
+
+                # get data for transaction
+                dpoint_time = datetime.datetime.fromtimestamp(float(self.app.branch_data[branch]["time"][i]), tz=timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
+                gic = self.app.branch_data[branch]["GICs"][i]
+                if(self.app.branch_data[branch]["has_trans"]):
+                    if(self.app.branch_data[branch]["warning_time"] != None):
+                        overheat_dt = datetime.datetime.fromtimestamp(float(self.app.branch_data[branch]["warning_time"]), tz=timezone.utc)
+                        now_dt = datetime.datetime.fromtimestamp(float(self.app.branch_data[branch]["time"][i]), tz=timezone.utc)
                         ttc = overheat_dt - now_dt
                         ttc = int(ttc.total_seconds() / 60)
                     else:
                         ttc = None
+
+                # insert data
                 transaction.execute("""INSERT INTO Datapoint(FROM_BUS, TO_BUS, CIRCUIT, GRID_NAME,
-                    DPOINT_TIME, DPOINT_GIC, DPOINT_VLEVEL, DPOINT_TTC) VALUES(?,?,?,?,?,?,?,?)""",
-                    [branch[0], branch[1], branch[2], grid_name, dpoint_time, gic, 0, ttc])
+                    DPOINT_TIME, DPOINT_GIC, DPOINT_TTC) VALUES(?,?,?,?,?,?,?)""",
+                    [branch[0], branch[1], branch[2], grid_name, dpoint_time, gic, ttc])
                 # TODO: allow cancelling here
                 self.db_conn.commit()
                 transaction.close()
@@ -730,6 +740,11 @@ def local_to_utc(time_val):
 def utc_to_local(time_val):
     local_timezone = datetime.datetime.now().astimezone().tzinfo
     return time_val.replace(tzinfo=timezone.utc).astimezone(local_timezone)
+
+def file_chksm(filename):
+    with open(filename, "rb") as storm_file:
+        file_bytes = storm_file.read()
+        return hashlib.sha256(file_bytes).hexdigest()
 
 if __name__ == "__main__":
     core = Core()

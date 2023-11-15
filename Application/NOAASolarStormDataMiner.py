@@ -80,13 +80,13 @@ def storm_data_to_csv(df:pd.DataFrame, file_path) -> None:
     end_time = end_time[:10] + '-' + end_time[11:13] + end_time[14:16] + end_time[17:]
     
 
-    file_name = 'Predicted_storm_data_' + start_time + '_' + end_time + '.csv'
+    file_name = 'Predicted_storm_data_' + str(start_time) + '_' + str(end_time) + '.csv'
 
     file_path = file_path + os.path.sep + file_name
     
     df.to_csv(file_path)
 
-    return None
+    return file_name
 
 def storm_data_dst_merge(data:pd.DataFrame, dst:pd.DataFrame) -> pd.DataFrame:
     """ This function merges the storm data with the dst. 
@@ -257,6 +257,6 @@ def data_scraper(start_date:str, log_queue:object, file_path:str = None) -> [pd.
     # create file with the data if a file path is given
     if file_path:
         log_queue.put("Saving data to file path...\n")
-        storm_data_to_csv(data, file_path)
-        log_queue.put("Data saved to file path.\n")
-    return data, is_invalid
+        storm_file = storm_data_to_csv(data, file_path)
+        log_queue.put("Data saved to file path: " + storm_file + "\n")
+    return (data, is_invalid, storm_file)
