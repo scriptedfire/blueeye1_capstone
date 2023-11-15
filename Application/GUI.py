@@ -466,8 +466,9 @@ class App(tk.Tk):
             gic = None
             if(self.sim_running):
                 gic = self.branch_data[branches[i]]["Current_GIC"]
-                if(branch_inversions[branches[i]]):
-                    gic *= -1.0
+                # seems that's not how sign works in power
+                #if(branch_inversions[branches[i]]):
+                #    gic *= -1.0
             GIC_label = ttk.Label(self.bus_frame, text="GIC: XXX.XXX A" if not(self.sim_running)
                                   else "GIC: " + str(gic) + " A")
             GIC_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
@@ -733,8 +734,10 @@ class App(tk.Tk):
                             "ground_r" : 1.57} # TODO: approximate grounding resistance from Bus NomkV
                         sub_lats.append(float(sub["Latitude"]))
                         sub_longs.append(float(sub["Longitude"]))
-                    except KeyError:
+                    except Exception as e:
                         missing_field = field_tester(sub, ["Number", "Name", "Latitude", "Longitude"])
+                        if(missing_field == None):
+                            raise e
                         messagebox.showerror("file load error", missing_field + " data field missing from Substation data.")
                         if(self.grid_name != ""):
                             self.redraw_grid()
@@ -756,8 +759,10 @@ class App(tk.Tk):
                             "sub_num" : int(bus["SubNumber"]),
                             "NomkV" : float(bus["NomkV"])
                         }
-                    except KeyError:
+                    except Exception as e:
                         missing_field = field_tester(bus, ["Number", "Name", "SubNumber", "NomkV"])
+                        if(missing_field == None):
+                            raise e
                         messagebox.showerror("file load error", missing_field + " data field missing from Bus data.")
                         if(self.grid_name != ""):
                             self.redraw_grid()
@@ -771,16 +776,22 @@ class App(tk.Tk):
                     divisor = float(f_data["Transformer"][0]["XFMVABase"])
                 except KeyError:
                     messagebox.showerror("file load error", "XFMVABase data field missing from Transformer data.")
+                    if(self.grid_name != ""):
+                            self.redraw_grid()
+                            self.start_btn.state(["!disabled"])
+                    return
                 for line in f_data["Branch"]:
                     try:
                         resistance = temp_bus_data[int(line["BusNumFrom"])]["NomkV"]**2 / divisor
                         resistance *= float(line["R"])
                         temp_branch_data[(int(line["BusNumFrom"]), int(line["BusNumTo"]), int(line["Circuit"]))] = {
                             "has_trans" : (line["BranchDeviceType"] == "Transformer"), "resistance": resistance,
-                            "type": None, "trans_w1": None, "trans_w2": None, "GIC_BD": False, "Current_GIC" : 0.0
-                        } # TODO: use (line["SeriesCap"] == "YES") for GIC_BD
-                    except KeyError:
+                            "type": None, "trans_w1": None, "trans_w2": None, "GIC_BD": (line["SeriesCap"] == "YES"), "Current_GIC" : 0.0
+                        }
+                    except Exception as e:
                         missing_field = field_tester(line, ["R", "BusNumFrom", "BusNumTo", "Circuit", "BranchDeviceType", "SeriesCap"])
+                        if(missing_field == None):
+                            raise e
                         messagebox.showerror("file load error", missing_field + " data field missing from Branch data.")
                         if(self.grid_name != ""):
                             self.redraw_grid()
@@ -822,10 +833,12 @@ class App(tk.Tk):
                         temp_branch_data[branch]["trans_w1"] = w1
                         temp_branch_data[branch]["trans_w2"] = w2
                         temp_branch_data[branch]["type"] = trans_type
-                    except KeyError:
+                    except Exception as e:
                         missing_field = field_tester(trans, ["BusNumFrom", "BusNumTo", "Circuit",
                                                              "XFNomkVbaseTo", "XFMVABase", "XFNomkVbaseFrom",
                                                              "XFConfiguration"])
+                        if(missing_field == None):
+                            raise e
                         messagebox.showerror("file load error", missing_field + " data field missing from Transformer data.")
                         if(self.grid_name != ""):
                             self.redraw_grid()
@@ -1298,8 +1311,9 @@ class App(tk.Tk):
                     if(branch_ids in branches):
                         labels = self.branch_display_vals[branch_ids]
                         gic = self.branch_data[branch_ids]["Current_GIC"]
-                        if(branch_inversions[branch_ids]):
-                            gic *= -1.0
+                        # seems that's not how sign works in power
+                        #if(branch_inversions[branches[i]]):
+                        #    gic *= -1.0
                         labels["GIC_label"]["text"] = "GIC: " + str(gic) + " A"
                         if(self.branch_data[branch_ids]["has_trans"]):
                             ttc = self.branch_data[branch_ids]["warning_time"]
