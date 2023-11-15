@@ -3,7 +3,7 @@ from tkinter import N,S,E,W
 from tkinter import ttk
 from tkinter import filedialog as fdialog
 from tkinter import messagebox
-from datetime import datetime, timedelta, date, timezone
+from datetime import datetime, timedelta, date
 from threading import Thread, Semaphore, Event
 from time import sleep
 from grid_approximations import estimate_winding_impedance, get_grounding_resistance
@@ -409,7 +409,9 @@ class App(tk.Tk):
             @param: bus_num: The bus id for the bus that will be displayed
         """
         # get branches
-        branches = self.get_branches_for_bus(bus_num)
+        outgoing_branch_data = self.get_branches_for_bus(bus_num)
+        branches = outgoing_branch_data[0]
+        branch_inversions = outgoing_branch_data[1]
         
         # get bus on other end of each branch
         to_buses = []
@@ -461,8 +463,13 @@ class App(tk.Tk):
                 current_row += 1
 
             # create GIC label
+            gic = None
+            if(self.sim_running):
+                gic = self.branch_data[branches[i]]["Current_GIC"]
+                if(branch_inversions[branches[i]]):
+                    gic *= -1.0
             GIC_label = ttk.Label(self.bus_frame, text="GIC: XXX.XXX A" if not(self.sim_running)
-                                  else "GIC: " + str(self.branch_data[branches[i]]["Current_GIC"]) + " A")
+                                  else "GIC: " + str(gic) + " A")
             GIC_label.grid(column=current_column, row=current_row, sticky=(N,W), padx=4)
             self.branch_display_vals[branches[i]]["GIC_label"] = GIC_label
             current_row += 1
@@ -525,187 +532,185 @@ class App(tk.Tk):
                 f_str = grid_file.read()
 
                 # detect whether or not legacy headers are in use
-                # TODO: unsupport legacy headers?
-                legacy_headers = False
                 if "DATA (" in f_str:
-                    legacy_headers = True
+                    messagebox.showerror("file load error", "Legacy AUX file format is not supported.")
+                    return
 
                 f_data = {}
 
                 # parse the data into a dictionary structure
-                if not legacy_headers:
-                    # initialize and run through state machine that parses a PowerWorld aux file
-                    # into a dictionary of sections, each containing a list of items within
-                    # that section, the states are:
-                    # waiting, section_header, waiting_data_headers,
-                    # data_headers, waiting_data, data, datapoint, quoted
-                    # ignore_script, ignore_line, ignore_line_data, ignore_block
-                    parser_state = "waiting"
-                    accumulator = ""
-                    section_header = None
-                    data_headers = []
-                    cur_data = 0
-                    data_line = {}
-                    for c in f_str:
-                        if(parser_state == "waiting"):
-                            # section header not yet reached
-                            if(c.isspace()):
-                                continue
+                # initialize and run through state machine that parses a PowerWorld aux file
+                # into a dictionary of sections, each containing a list of items within
+                # that section, the states are:
+                # waiting, section_header, waiting_data_headers,
+                # data_headers, waiting_data, data, datapoint, quoted
+                # ignore_script, ignore_line, ignore_line_data, ignore_block
+                parser_state = "waiting"
+                accumulator = ""
+                section_header = None
+                data_headers = []
+                cur_data = 0
+                data_line = {}
+                for c in f_str:
+                    if(parser_state == "waiting"):
+                        # section header not yet reached
+                        if(c.isspace()):
+                            continue
 
-                            # ignore comments
-                            if(c == '/'):
-                                accumulator += c
-                                if(accumulator == "//"):
-                                    accumulator = ""
-                                    parser_state = "ignore_line"
-                                continue
-
-                            # section header reached, begin building
+                        # ignore comments
+                        if(c == '/'):
                             accumulator += c
-                            parser_state = "section_header"
-                        elif(parser_state == "section_header"):
-                            # end of section header reached
-                            if(c.isspace()):
-                                # ignore SCRIPT sections
-                                if(accumulator == "SCRIPT"):
-                                    accumulator = ""
-                                    parser_state = "ignore_script"
-                                    continue
-
-                                # offset sections with the same name
-                                if accumulator in f_data:
-                                    offset = 1
-                                    while((accumulator + "_" + str(offset)) in f_data):
-                                        offset += 1
-                                    accumulator = accumulator + "_" + str(offset)
-
-                                section_header = accumulator
+                            if(accumulator == "//"):
                                 accumulator = ""
-                                f_data[section_header] = []
-                                parser_state = "waiting_data_headers"
-                                continue
+                                parser_state = "ignore_line"
+                            continue
 
-                            # accumulate section header
-                            accumulator += c
-                        elif(parser_state == "waiting_data_headers"):
-                            if(c == '('):
-                                parser_state = "data_headers"
-                                continue
-
-                            if not(c.isspace()):
-                                messagebox.showerror("file load error", "Unexpected character before data headers in " + section_header + " section")
-                                return
-                        elif(parser_state == "data_headers"):
-                            # ignore whitespace
-                            if(c.isspace()):
-                                continue
-                            # push a data header and change states
-                            if(c == ')'):
-                                data_headers.append(accumulator)
+                        # section header reached, begin building
+                        accumulator += c
+                        parser_state = "section_header"
+                    elif(parser_state == "section_header"):
+                        # end of section header reached
+                        if(c.isspace()):
+                            # ignore SCRIPT sections
+                            if(accumulator == "SCRIPT"):
                                 accumulator = ""
-                                parser_state = "waiting_data"
-                                continue
-                            # push a data header
-                            if(c == ','):
-                                data_headers.append(accumulator)
-                                accumulator = ""
+                                parser_state = "ignore_script"
                                 continue
 
-                            # accumulate a data header
-                            accumulator += c
-                        elif(parser_state == "waiting_data"):
-                            if(c == '{'):
-                                parser_state = "data"
-                                continue
+                            # offset sections with the same name
+                            if accumulator in f_data:
+                                offset = 1
+                                while((accumulator + "_" + str(offset)) in f_data):
+                                    offset += 1
+                                accumulator = accumulator + "_" + str(offset)
 
-                            if not(c.isspace()):
-                                messagebox.showerror("file load error", "Unexpected character before data in " + section_header + " section")
-                                return
-                        elif(parser_state == "data"):
-                            if(c == '}'):
-                                if(cur_data != 0):
-                                    messagebox.showerror("file load error", "Malformed data in " + section_header + " section")
-                                    return
-                                section_header = None
-                                data_headers = []
-                                parser_state = "waiting"
-                                continue
-                            if(c == '\"'):
-                                parser_state = "quoted"
-                                continue
-                            if(c == '/'):
-                                accumulator += c
-                                if(accumulator == "//"):
-                                    accumulator = ""
-                                    parser_state = "ignore_line_data"
-                                continue
-                            if(c == '<'):
-                                parser_state = "ignore_block"
-                                continue
-                            if(c.isspace()):
-                                continue
-
-                            # datapoint hit
-                            accumulator += c
-                            parser_state = "datapoint"
-                        elif(parser_state == "datapoint"):
-                            if(c.isspace()):
-                                try:
-                                    data_line[data_headers[cur_data]] = accumulator
-                                except:
-                                    print(data_line)
-                                    print(data_headers)
-                                    print(cur_data)
-                                    break
-                                cur_data += 1
-                                if(cur_data == len(data_headers)):
-                                    f_data[section_header].append(data_line)
-                                    data_line = {}
-                                    cur_data = 0
-                                accumulator = ""
-                                parser_state = "data"
-                                continue
-
-                            # accumulate datapoint
-                            accumulator += c
-                        elif(parser_state == "quoted"):
-                            if(c == '\"'):
-                                data_line[data_headers[cur_data]] = accumulator
-                                cur_data += 1
-                                if(cur_data == len(data_headers)):
-                                    f_data[section_header].append(data_line)
-                                    data_line = {}
-                                    cur_data = 0
-                                accumulator = ""
-                                parser_state = "data"
-                                continue
-
-                            # accumulate quoted datapoint
-                            accumulator += c
-                        elif(parser_state == "ignore_script"):
-                            if(c == '}'):
-                                parser_state = "waiting"
-                        elif(parser_state == "ignore_line"):
-                            if(c == '\n'):
-                                parser_state = "waiting"
-                        elif(parser_state == "ignore_line_data"):
-                            if(c == '\n'):
-                                parser_state = "data"
-                        elif(parser_state == "ignore_block"):
-                            if(c == '<'):
-                                accumulator += c
-                                continue
-                            if(c == '/'):
-                                accumulator += c
-                                if(accumulator == "</"):
-                                    accumulator = ""
-                                    parser_state = "ignore_block_end"
-                                continue
-
+                            section_header = accumulator
                             accumulator = ""
-                        elif(parser_state == "ignore_block_end"):
-                            if(c == '>'):
-                                parser_state = "data"
+                            f_data[section_header] = []
+                            parser_state = "waiting_data_headers"
+                            continue
+
+                        # accumulate section header
+                        accumulator += c
+                    elif(parser_state == "waiting_data_headers"):
+                        if(c == '('):
+                            parser_state = "data_headers"
+                            continue
+
+                        if not(c.isspace()):
+                            messagebox.showerror("file load error", "Unexpected character before data headers in " + section_header + " section")
+                            return
+                    elif(parser_state == "data_headers"):
+                        # ignore whitespace
+                        if(c.isspace()):
+                            continue
+                        # push a data header and change states
+                        if(c == ')'):
+                            data_headers.append(accumulator)
+                            accumulator = ""
+                            parser_state = "waiting_data"
+                            continue
+                        # push a data header
+                        if(c == ','):
+                            data_headers.append(accumulator)
+                            accumulator = ""
+                            continue
+
+                        # accumulate a data header
+                        accumulator += c
+                    elif(parser_state == "waiting_data"):
+                        if(c == '{'):
+                            parser_state = "data"
+                            continue
+
+                        if not(c.isspace()):
+                            messagebox.showerror("file load error", "Unexpected character before data in " + section_header + " section")
+                            return
+                    elif(parser_state == "data"):
+                        if(c == '}'):
+                            if(cur_data != 0):
+                                messagebox.showerror("file load error", "Malformed data in " + section_header + " section")
+                                return
+                            section_header = None
+                            data_headers = []
+                            parser_state = "waiting"
+                            continue
+                        if(c == '\"'):
+                            parser_state = "quoted"
+                            continue
+                        if(c == '/'):
+                            accumulator += c
+                            if(accumulator == "//"):
+                                accumulator = ""
+                                parser_state = "ignore_line_data"
+                            continue
+                        if(c == '<'):
+                            parser_state = "ignore_block"
+                            continue
+                        if(c.isspace()):
+                            continue
+
+                        # datapoint hit
+                        accumulator += c
+                        parser_state = "datapoint"
+                    elif(parser_state == "datapoint"):
+                        if(c.isspace()):
+                            try:
+                                data_line[data_headers[cur_data]] = accumulator
+                            except:
+                                print(data_line)
+                                print(data_headers)
+                                print(cur_data)
+                                break
+                            cur_data += 1
+                            if(cur_data == len(data_headers)):
+                                f_data[section_header].append(data_line)
+                                data_line = {}
+                                cur_data = 0
+                            accumulator = ""
+                            parser_state = "data"
+                            continue
+
+                        # accumulate datapoint
+                        accumulator += c
+                    elif(parser_state == "quoted"):
+                        if(c == '\"'):
+                            data_line[data_headers[cur_data]] = accumulator
+                            cur_data += 1
+                            if(cur_data == len(data_headers)):
+                                f_data[section_header].append(data_line)
+                                data_line = {}
+                                cur_data = 0
+                            accumulator = ""
+                            parser_state = "data"
+                            continue
+
+                        # accumulate quoted datapoint
+                        accumulator += c
+                    elif(parser_state == "ignore_script"):
+                        if(c == '}'):
+                            parser_state = "waiting"
+                    elif(parser_state == "ignore_line"):
+                        if(c == '\n'):
+                            parser_state = "waiting"
+                    elif(parser_state == "ignore_line_data"):
+                        if(c == '\n'):
+                            parser_state = "data"
+                    elif(parser_state == "ignore_block"):
+                        if(c == '<'):
+                            accumulator += c
+                            continue
+                        if(c == '/'):
+                            accumulator += c
+                            if(accumulator == "</"):
+                                accumulator = ""
+                                parser_state = "ignore_block_end"
+                            continue
+
+                        accumulator = ""
+                    elif(parser_state == "ignore_block_end"):
+                        if(c == '>'):
+                            parser_state = "data"
                 
                 # clear any active views other than grid
                 if(self.sub_view_active):
@@ -719,21 +724,22 @@ class App(tk.Tk):
                 temp_substation_data = {}
                 sub_lats = []
                 sub_longs = []
-                try:
-                    for sub in f_data["Substation"]:
+                for sub in f_data["Substation"]:
+                    try:
                         temp_substation_data[int(sub["Number"])] = {
                             "name" : sub["Name"],
                             "lat" : float(sub["Latitude"]),
                             "long" : float(sub["Longitude"]),
-                            "ground_r" : 1.57}
+                            "ground_r" : 1.57} # TODO: approximate grounding resistance from Bus NomkV
                         sub_lats.append(float(sub["Latitude"]))
                         sub_longs.append(float(sub["Longitude"]))
-                except KeyError:
-                    messagebox.showerror("file load error", "Substation data missing")
-                    if(self.grid_name != ""):
-                        self.redraw_grid()
-                        self.start_btn.state(["!disabled"])
-                    return
+                    except KeyError:
+                        missing_field = field_tester(sub, ["Name", "Latitude", "Longitude"])
+                        messagebox.showerror("file load error", missing_field + " data field missing from Substation data.")
+                        if(self.grid_name != ""):
+                            self.redraw_grid()
+                            self.start_btn.state(["!disabled"])
+                        return
                 
                 # load limits into state
                 temp_min_long = min(sub_longs)
@@ -743,39 +749,46 @@ class App(tk.Tk):
 
                 # get bus data
                 temp_bus_data = {}
-                try:
-                    for bus in f_data["Bus"]:
+                for bus in f_data["Bus"]:
+                    try:
                         temp_bus_data[int(bus["Number"])] = {
                             "name" : bus["Name"],
                             "sub_num" : int(bus["SubNumber"]),
                             "NomkV" : float(bus["NomkV"])
-                        } # TODO: use bus NomKv to approximate substation grounding resistance?
-                except KeyError:
-                    messagebox.showerror("file load error", "Bus data missing")
-                    if(self.grid_name != ""):
-                        self.redraw_grid()
-                        self.start_btn.state(["!disabled"])
-                    return
+                        }
+                    except KeyError:
+                        missing_field = field_tester(bus, ["Name", "SubNumber", "NomkV"])
+                        messagebox.showerror("file load error", missing_field + " data field missing from Bus data.")
+                        if(self.grid_name != ""):
+                            self.redraw_grid()
+                            self.start_btn.state(["!disabled"])
+                        return
                 
                 # get line and transformer data
                 temp_branch_data = {}
+                divisor = None
                 try:
-                    for line in f_data["Branch"]:
-                        resistance = temp_bus_data[int(line["BusNumFrom"])]["NomkV"]**2 / float(f_data["Transformer"][0]["XFMVABase"])
+                    divisor = float(f_data["Transformer"][0]["XFMVABase"])
+                except KeyError:
+                    messagebox.showerror("file load error", "XFMVABase data field missing from Transformer data.")
+                for line in f_data["Branch"]:
+                    try:
+                        resistance = temp_bus_data[int(line["BusNumFrom"])]["NomkV"]**2 / divisor
                         resistance *= float(line["R"])
                         temp_branch_data[(int(line["BusNumFrom"]), int(line["BusNumTo"]), int(line["Circuit"]))] = {
                             "has_trans" : (line["BranchDeviceType"] == "Transformer"), "resistance": resistance,
                             "type": None, "trans_w1": None, "trans_w2": None, "GIC_BD": False, "Current_GIC" : 0.0
                         } # TODO: use (line["SeriesCap"] == "YES") for GIC_BD
-                except KeyError:
-                    messagebox.showerror("file load error", "Transformer data missing")
-                    if(self.grid_name != ""):
-                        self.redraw_grid()
-                        self.start_btn.state(["!disabled"])
-                    return
+                    except KeyError:
+                        missing_field = field_tester(line, ["R", "BusNumFrom", "BusNumTo", "Circuit", "BranchDeviceType", "SeriesCap"])
+                        messagebox.showerror("file load error", missing_field + " data field missing from Branch data.")
+                        if(self.grid_name != ""):
+                            self.redraw_grid()
+                            self.start_btn.state(["!disabled"])
+                        return
                 
-                try:
-                    for trans in f_data["Transformer"]:
+                for trans in f_data["Transformer"]:
+                    try:
                         # gather values to estimate winding impedance
                         branch = (int(trans["BusNumFrom"]), int(trans["BusNumTo"]), int(trans["Circuit"]))
                         resistance = temp_branch_data[branch]["resistance"]
@@ -809,12 +822,15 @@ class App(tk.Tk):
                         temp_branch_data[branch]["trans_w1"] = w1
                         temp_branch_data[branch]["trans_w2"] = w2
                         temp_branch_data[branch]["type"] = trans_type
-                except KeyError:
-                    messagebox.showerror("file load error", "Transformer data missing")
-                    if(self.grid_name != ""):
-                        self.redraw_grid()
-                        self.start_btn.state(["!disabled"])
-                    return
+                    except KeyError:
+                        missing_field = field_tester(trans, ["BusNumFrom", "BusNumTo", "Circuit",
+                                                             "XFNomkVbaseTo", "XFMVABase", "XFNomkVbaseFrom",
+                                                             "XFConfiguration"])
+                        messagebox.showerror("file load error", missing_field + " data field missing from Transformer data.")
+                        if(self.grid_name != ""):
+                            self.redraw_grid()
+                            self.start_btn.state(["!disabled"])
+                        return
 
                 # no errors encountered so data has been accepted
                 self.grid_name = grid_file.name[:-4]
@@ -1213,6 +1229,9 @@ class App(tk.Tk):
         self.close_sim_config()
 
         while(self.sim_running):
+            # get current time for monitoring cycle time
+            loop_start = datetime.now()
+
             # update time label
             self.time_label["text"] = "Time In Simulation: " + self.sim_time.strftime("%m/%d/%Y, %H:%M:%S")
 
@@ -1224,10 +1243,18 @@ class App(tk.Tk):
             core_event.wait()
             time_data = retval[0]
 
-            # TODO: use abs value of gics for color display
+            # use abs value of gics for color display
+            # use only gics between subs for color display
             gics = []
+            btwn_subs = self.get_branches_btwn_subs()
+            # reformat btwn_subs
+            btwn_subs_map = {}
+            for item in btwn_subs:
+                btwn_subs_map[(item[2], item[3], item[4])] = None
             for point in time_data:
-                gics.append(point[5])
+                branch_ids = (point[0], point[1], point[2])
+                if branch_ids in btwn_subs_map:
+                    gics.append(abs(point[5]))
 
             self.max_gic = max(gics)
             self.min_gic = min(gics)
@@ -1235,17 +1262,16 @@ class App(tk.Tk):
             print(self.max_gic)
             print(self.min_gic)
 
-            # TODO: redo this portion to run more logic for storing current values in cache
-
             for point in time_data:
                 branch_ids = (point[0], point[1], point[2])
                 self.branch_data[branch_ids]["Current_GIC"] = round(point[5], 3)
                 if(self.branch_data[branch_ids]["has_trans"]):
                     self.branch_data[branch_ids]["warning_time"] = point[6]
                 gic = point[5]
-                # normalize gic
-                normalized = (gic - self.min_gic) / (self.max_gic - self.min_gic)
-                self.branch_data[branch_ids]["display_color"] = self.rgb_hack((int(255 * normalized), 0, int(255 * (1 - normalized))))
+                # normalize gic and make color for branches between subs
+                if branch_ids in btwn_subs_map:
+                    normalized = (abs(gic) - self.min_gic) / (self.max_gic - self.min_gic)
+                    self.branch_data[branch_ids]["display_color"] = self.rgb_hack((int(255 * normalized), 0, int(255 * (1 - normalized))))
 
 
             if(self.grid_canvas_active):
@@ -1264,25 +1290,33 @@ class App(tk.Tk):
 
             elif(self.bus_view_active):
                 # update all labels
-                branches = self.get_branches_for_bus(self.bus_view_bus_num)
+                outgoing_branch_data = self.get_branches_for_bus(self.bus_view_bus_num)
+                branches = outgoing_branch_data[0]
+                branch_inversions = outgoing_branch_data[1]
                 for point in time_data:
                     branch_ids = (point[0], point[1], point[2])
                     if(branch_ids in branches):
                         labels = self.branch_display_vals[branch_ids]
-                        labels["GIC_label"]["text"] = "GIC: " + str(self.branch_data[branch_ids]["Current_GIC"]) + " A"
+                        gic = self.branch_data[branch_ids]["Current_GIC"]
+                        if(branch_inversions[branch_ids]):
+                            gic *= -1.0
+                        labels["GIC_label"]["text"] = "GIC: " + str(gic) + " A"
                         if(self.branch_data[branch_ids]["has_trans"]):
                             ttc = self.branch_data[branch_ids]["warning_time"]
                             labels["TTC_label"]["text"] = "Time to overheat: N/A" if (ttc == None) else "Time to overheat: " + str(ttc) + " minutes"
 
+            # busy wait until second has passed (allows thread to still respond to pausing or closing)
+            while(True):
+                sleep(0.2)
+                # block here if sim is paused
+                self.sim_unpause.wait()
+                if((datetime.now() > loop_start + timedelta(seconds=1)) or not self.sim_running):
+                    break
+
             # update sim time
-            # TODO: busy sleep for responsiveness
-            sleep(1)
             self.sim_time += timedelta(minutes=1)
             if(self.sim_time >= (self.start_time + timedelta(minutes=60))):
                 self.sim_time = self.start_time
-
-            # block here if sim is paused
-            self.sim_unpause.wait()
 
     ########################
     # Conversion Functions #
@@ -1382,13 +1416,15 @@ class App(tk.Tk):
             @param: bus_num: The bus for which to get branches
             return: branch_tuples: List of tuples that represent the branches attached to the given bus
         """
-        # TODO: pass whether or not a branch is inverted for displaying sign correctly in bus view
+        # TODO: revise return value documentation
         branch_tuples = []
+        branch_inversions = {}
         for branch_tuple in self.branch_data:
             if(branch_tuple[0] == bus_num or branch_tuple[1] == bus_num):
                 branch_tuples.append(branch_tuple)
+                branch_inversions[branch_tuple] = (branch_tuple[1] == bus_num)
 
-        return branch_tuples
+        return branch_tuples, branch_inversions
     
     ##########################
     # Grid Drawing Functions #
@@ -1497,6 +1533,9 @@ class App(tk.Tk):
         else:
             self.create_grid_canvas()
 
+        # draw grid labels
+        self.generate_axial_labels()
+
         # get branches between substations
         branches_btwn_subs = self.get_branches_btwn_subs()
 
@@ -1569,5 +1608,18 @@ class App(tk.Tk):
         if(len(overlaps_list) > 0):
             self.core.log_to_file("GUI", "Worst overlap: " + str(max(overlaps_list)))
 
-        # draw grid labels
-        self.generate_axial_labels()
+###################
+# Misc. Functions #
+###################
+
+def field_tester(data, fields):
+    """Tests if a given list of fields exist in a given dictionary and returns
+        the first missing field."""
+    test_var = None
+    for field in fields:
+        try:
+            test_var = data[field]
+        except KeyError:
+            return field
+    
+    return None
