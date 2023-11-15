@@ -1198,16 +1198,6 @@ class App(tk.Tk):
         # TODO: not sure an error during the database stage gets printed, add additional loading stage?
         messagebox.showinfo("Loaded!", "Simulation has been loaded!")
 
-        # clear any active views other than grid
-        if(self.sub_view_active):
-            self.destroy_sub_view()
-            self.create_grid_canvas()
-            self.redraw_grid()
-        elif(self.bus_view_active):
-            self.destroy_bus_view()
-            self.create_grid_canvas()
-            self.redraw_grid()
-
         # load first minute of data
         retval = []
         core_event = self.core.send_request(self.core.get_data_for_time, {
@@ -1237,6 +1227,47 @@ class App(tk.Tk):
 
         if not(warning_str == ""):
             messagebox.showwarning("transformers overheating", warning_str)
+
+        # prepopulate sim data
+        # use abs value of gics for color display
+        # use only gics between subs for color display
+        gics = []
+        btwn_subs = self.get_branches_btwn_subs()
+        # reformat btwn_subs
+        btwn_subs_map = {}
+        for item in btwn_subs:
+            btwn_subs_map[(item[2], item[3], item[4])] = None
+        for point in time_data:
+            branch_ids = (point[0], point[1], point[2])
+            if branch_ids in btwn_subs_map:
+                gics.append(abs(point[5]))
+
+        self.max_gic = max(gics)
+        self.min_gic = min(gics)
+
+        print(self.max_gic)
+        print(self.min_gic)
+
+        for point in time_data:
+            branch_ids = (point[0], point[1], point[2])
+            self.branch_data[branch_ids]["Current_GIC"] = round(point[5], 3)
+            if(self.branch_data[branch_ids]["has_trans"]):
+                self.branch_data[branch_ids]["warning_time"] = point[6]
+            gic = point[5]
+            # normalize gic and make color for branches between subs
+            if branch_ids in btwn_subs_map:
+                normalized = (abs(gic) - self.min_gic) / (self.max_gic - self.min_gic)
+                self.branch_data[branch_ids]["display_color"] = self.rgb_hack((int(255 * normalized), 0, int(255 * (1 - normalized))))
+
+        # clear any active views other than grid
+        if(self.sub_view_active):
+            self.destroy_sub_view()
+            self.create_grid_canvas()
+            self.redraw_grid()
+        elif(self.bus_view_active):
+            self.destroy_bus_view()
+            self.create_grid_canvas()
+            self.redraw_grid()
 
         self.switch_to_sim_active_ui()
         self.close_sim_config()
@@ -1285,7 +1316,6 @@ class App(tk.Tk):
                 if branch_ids in btwn_subs_map:
                     normalized = (abs(gic) - self.min_gic) / (self.max_gic - self.min_gic)
                     self.branch_data[branch_ids]["display_color"] = self.rgb_hack((int(255 * normalized), 0, int(255 * (1 - normalized))))
-
 
             if(self.grid_canvas_active):
                 # update all branch colors
