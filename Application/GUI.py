@@ -734,7 +734,7 @@ class App(tk.Tk):
                         sub_lats.append(float(sub["Latitude"]))
                         sub_longs.append(float(sub["Longitude"]))
                     except KeyError:
-                        missing_field = field_tester(sub, ["Name", "Latitude", "Longitude"])
+                        missing_field = field_tester(sub, ["Number", "Name", "Latitude", "Longitude"])
                         messagebox.showerror("file load error", missing_field + " data field missing from Substation data.")
                         if(self.grid_name != ""):
                             self.redraw_grid()
@@ -757,7 +757,7 @@ class App(tk.Tk):
                             "NomkV" : float(bus["NomkV"])
                         }
                     except KeyError:
-                        missing_field = field_tester(bus, ["Name", "SubNumber", "NomkV"])
+                        missing_field = field_tester(bus, ["Number", "Name", "SubNumber", "NomkV"])
                         messagebox.showerror("file load error", missing_field + " data field missing from Bus data.")
                         if(self.grid_name != ""):
                             self.redraw_grid()
