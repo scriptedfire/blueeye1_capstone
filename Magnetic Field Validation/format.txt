@@ -1,0 +1,17 @@
+  FORMAT OF THE SUBSETTED FILE
+    
+    ITEMS                      FORMAT   
+     
+ 1 Year                          I4        
+ 2 Day                           I4        
+ 3 Hour                          I3        
+ 4 Minute                        I3        
+ 5 Timeshift, sec                I7        
+ 6 BX, nT (GSE)                  F8.2      
+ 7 BY, nT (GSM)                  F8.2      
+ 8 BZ, nT (GSM)                  F8.2      
+ 9 Flow speed, km/s              F8.1      
+10 Vx Velocity, km/s, GSE        F8.1      
+11 Vy Velocity, km/s, GSE        F8.1      
+12 Vz Velocity, km/s, GSE        F8.1      
+13 Proton Density, n/cc          F7.2      
